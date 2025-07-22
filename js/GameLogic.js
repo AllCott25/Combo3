@@ -44,10 +44,26 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
     if ((v1.ingredients || []).length > 0 && (v2.ingredients || []).length > 0 && (v1.complete_combinations || []).length === 0 && (v2.complete_combinations || []).length === 0) {
       console.log("=== ENTERING CASE 1 (Ingredient Combination) === BUGSLIFE");
       
-      // DUPLICATE INGREDIENT FIX: Don't remove duplicates with Set - allow duplicate ingredients
-      // This allows recipes to require the same ingredient multiple times
-      let U = [...(v1.ingredients || []), ...(v2.ingredients || [])];
-      console.log("Combined ingredients (with duplicates allowed):", U, "BUGSLIFE");
+      // DUPLICATE INGREDIENT FIX: Check if vessels represent the same ingredient instance
+      // If both vessels have the same ingredient name, they shouldn't combine
+      if (v1.ingredients[0] === v2.ingredients[0]) {
+        console.log("Cannot combine two vessels with the same ingredient:", v1.ingredients[0]);
+        // Check if there's an easter egg that specifically requires two of this ingredient
+        if (typeof checkForEasterEgg === 'function' && easter_eggs && easter_eggs.length > 0) {
+          const eggMatch = checkForEasterEgg([v1.ingredients[0], v2.ingredients[0]]);
+          if (eggMatch) {
+            console.log("Found Easter egg that allows same-ingredient combination:", eggMatch.name);
+            // Allow the combination for easter eggs, but still return null to trigger easter egg display
+            displayEasterEgg(eggMatch, v1, v2);
+            moveHistory.push({type: 'easterEgg'});
+            return null; // Still return null to prevent vessel creation
+          }
+        }
+        return null; // Prevent same-ingredient combinations
+      }
+      
+      let U = [...new Set([...(v1.ingredients || []), ...(v2.ingredients || [])])];
+      console.log("Combined ingredients:", U, "BUGSLIFE");
       
       // APlasker - Easter Egg Check: Check if the combination of ingredients matches an Easter egg
       if (typeof checkForEasterEgg === 'function' && easter_eggs && easter_eggs.length > 0) {
@@ -64,11 +80,59 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
       }
       
       // Check if this combination matches or partially matches any recipe
-      // DUPLICATE INGREDIENT FIX: Update recipe matching logic to handle duplicates
       let C_candidates = intermediate_combinations.filter(C => {
-        // Check if the combined ingredients can fulfill this recipe's requirements
-        // For each required ingredient, check if we have enough instances
-        return canFulfillRecipeRequirements(U, C.required);
+        // Check if there's any overlap between the required ingredients and our combined set
+        let overlap = C.required.filter(ing => U.includes(ing));
+        // Only consider it a match if ALL ingredients in U are part of the recipe
+        // AND there's at least one ingredient from the recipe in U
+        let basicMatch = overlap.length > 0 && U.every(ing => C.required.includes(ing));
+        
+        // DUPLICATE INGREDIENT FIX: Additional check for vessel compatibility
+        // If vessels have instance tracking, ensure they can participate in this combination
+        if (basicMatch && v1.validCombos && v2.validCombos) {
+          // Check if at least one vessel can participate in this combination
+          const v1CanParticipate = v1.validCombos.length === 0 || v1.validCombos.includes(C.combo_id);
+          const v2CanParticipate = v2.validCombos.length === 0 || v2.validCombos.includes(C.combo_id);
+          
+          if (!v1CanParticipate && !v2CanParticipate) {
+            console.log(`Neither vessel can participate in combination ${C.name}`);
+            return false;
+          }
+          
+          // DUPLICATE INGREDIENT FIX: Check for ingredient instance conflicts
+          // If both vessels contain the same ingredient and this combo only needs one instance,
+          // check if there are other combos that need this ingredient
+          const sameIngredients = v1.ingredients.filter(ing => v2.ingredients.includes(ing));
+          if (sameIngredients.length > 0) {
+            // Count how many instances of this ingredient the recipe needs
+            const ingredientCounts = {};
+            C.required.forEach(ing => {
+              ingredientCounts[ing] = (ingredientCounts[ing] || 0) + 1;
+            });
+            
+            // If the recipe only needs one instance but we're trying to use both,
+            // check if there are other uncompleted combos that need this ingredient
+            for (const ing of sameIngredients) {
+              if (ingredientCounts[ing] === 1) {
+                // This combo only needs one instance of this ingredient
+                // Check if there are other combos that also need this ingredient
+                const otherCombosNeedingIngredient = intermediate_combinations.filter(otherCombo => 
+                  otherCombo.combo_id !== C.combo_id && 
+                  otherCombo.required.includes(ing) &&
+                  !vessels.some(vessel => vessel.name === otherCombo.name) // Combo not yet completed
+                );
+                
+                if (otherCombosNeedingIngredient.length > 0) {
+                  console.log(`Cannot use both ${ing} instances - other combos need this ingredient:`, 
+                    otherCombosNeedingIngredient.map(c => c.name));
+                  return false; // Reject this combination to preserve ingredient instances
+                }
+              }
+            }
+          }
+        }
+        
+        return basicMatch;
       });
       
       // Only create a new vessel if we have valid recipe candidates
@@ -85,8 +149,8 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
         let C = C_candidates[0];
         
         // Check if we have all required ingredients for this combination
-        // DUPLICATE INGREDIENT FIX: Use the new function to check requirements properly
-        if (canFulfillRecipeRequirements(U, C.required)) {
+        // Modified: Only check if all required ingredients are present, not requiring exact length match
+        if (C.required.every(ing => U.includes(ing))) {
           // Only turn green if not part of an active hint (simplified)
           if (!hintActive || !hintedCombos.includes(C.name)) {
             // Add to startedCombinations array before setting vessel properties
@@ -162,7 +226,7 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
           }
         } else {
           console.log(`Created white vessel with ingredients: ${U.join(', ')}`);
-          console.log(`Missing ingredients for ${C.name}: ${getMissingIngredients(U, C.required).join(', ')}`);
+          console.log(`Missing ingredients for ${C.name}: ${C.required.filter(ing => !U.includes(ing)).join(', ')}`);
           
           // Call partial combo message for yellow vessel (partial combination) - APlasker
           if (typeof Byline !== 'undefined' && Byline.showPartialComboMessage) {
@@ -257,9 +321,7 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
       // Extract vessel names
       let set1 = (v1.complete_combinations || []).length > 0 ? (v1.complete_combinations || []) : (v1.name ? [v1.name] : []);
       let set2 = (v2.complete_combinations || []).length > 0 ? (v2.complete_combinations || []) : (v2.name ? [v2.name] : []);
-      
-      // DUPLICATE INGREDIENT FIX: Don't remove duplicates here either - allow duplicate combinations
-      let combinedSet = [...set1, ...set2];
+      let combinedSet = [...new Set([...set1, ...set2])];
       
       console.log("Extracted vessel names:", { set1, set2, combinedSet }, "BUGSLIFE");
       
@@ -288,8 +350,9 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
       let isValidCombination = false;
       
       // First, check if this matches the final combination
-      // DUPLICATE INGREDIENT FIX: Use the new helper function to check final combination requirements
-      const isFinalCombo = canFulfillRecipeRequirements(combinedSet, final_combination.required);
+      const isFinalCombo = final_combination.required.length === combinedSet.length && 
+                          final_combination.required.every(req => combinedSet.includes(req)) &&
+                          combinedSet.every(item => final_combination.required.includes(item));
       
       if (isFinalCombo) {
         console.log("This combination matches the final recipe!");
@@ -371,9 +434,10 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
           console.log(`${vessel1Combo.name} is the parent of ${vessel2Combo.name}`);
           
           // Find any recipe that requires these two specifically
-          // DUPLICATE INGREDIENT FIX: Use the new helper function for recipe matching
           const matchingRecipe = intermediate_combinations.find(combo => 
-            canFulfillRecipeRequirements(combinedSet, combo.required)
+            combo.required.length === combinedSet.length &&
+            combo.required.every(req => combinedSet.includes(req)) &&
+            combinedSet.every(item => combo.required.includes(item))
           );
           
           if (matchingRecipe) {
@@ -386,9 +450,10 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
           console.log(`${vessel2Combo.name} is the parent of ${vessel1Combo.name}`);
           
           // Find any recipe that requires these two specifically
-          // DUPLICATE INGREDIENT FIX: Use the new helper function for recipe matching
           const matchingRecipe = intermediate_combinations.find(combo => 
-            canFulfillRecipeRequirements(combinedSet, combo.required)
+            combo.required.length === combinedSet.length &&
+            combo.required.every(req => combinedSet.includes(req)) &&
+            combinedSet.every(item => combo.required.includes(item))
           );
           
           if (matchingRecipe) {
@@ -402,9 +467,10 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
       // If no relationship found via parent-child, check if there's a direct recipe match
       if (!isValidCombination) {
         // Look for any recipe that requires exactly these vessels
-        // DUPLICATE INGREDIENT FIX: Use the new helper function for recipe matching
         const matchingRecipe = intermediate_combinations.find(combo => 
-          canFulfillRecipeRequirements(combinedSet, combo.required)
+          combo.required.length === combinedSet.length &&
+          combo.required.every(req => combinedSet.includes(req)) &&
+          combinedSet.every(item => combo.required.includes(item))
         );
         
         if (matchingRecipe) {
@@ -525,9 +591,10 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
         // Calculate the total number of items required in addition to the combo
         const requiredIngredients = recipe.required.filter(item => item !== comboName);
         
-        // DUPLICATE INGREDIENT FIX: Use the new helper function to check if ingredients match requirements
-        // For a valid match, all required ingredients should be in our ingredient vessel with proper counts
-        return canFulfillRecipeRequirements(ingredients, requiredIngredients);
+        // For a valid match, all required ingredients should be in our ingredient vessel
+        // and the count should match (we shouldn't have extra ingredients)
+        return requiredIngredients.length === ingredients.length && 
+               requiredIngredients.every(req => ingredients.includes(req));
       });
       
       // If we found matches through parent-child relationship
@@ -576,10 +643,9 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
       } else {
         // If no parent-child match found, try a simpler recipe match as fallback
         matchingRecipes = intermediate_combinations.filter(recipe => {
-          // DUPLICATE INGREDIENT FIX: Check if recipe requires the combo and can be fulfilled by available ingredients
-          // Create a combined list of what we have (combo + ingredients)
-          const availableItems = [comboName, ...ingredients];
-          return canFulfillRecipeRequirements(availableItems, recipe.required);
+          // Check if recipe requires both the combo and all the ingredients
+          return recipe.required.includes(comboName) &&
+                 ingredients.every(ing => recipe.required.includes(ing));
         });
         
         if (matchingRecipes.length > 0) {

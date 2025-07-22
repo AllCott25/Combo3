@@ -1075,13 +1075,26 @@ let intermediate_combinations = [
     let hintActive = showingHint && hintVessel;
     
     if (v1.ingredients.length > 0 && v2.ingredients.length > 0 && v1.complete_combinations.length === 0 && v2.complete_combinations.length === 0) {
-      // DUPLICATE INGREDIENT FIX: Don't remove duplicates with Set - allow duplicate ingredients
-      let U = [...v1.ingredients, ...v2.ingredients];
+      // DUPLICATE INGREDIENT FIX: Check if vessels represent the same ingredient instance
+      // If both vessels have the same ingredient name, they shouldn't combine
+      if (v1.ingredients[0] === v2.ingredients[0]) {
+        console.log("Cannot combine two vessels with the same ingredient:", v1.ingredients[0]);
+        // Check if there's an easter egg that specifically requires two of this ingredient
+        if (typeof checkForEasterEgg === 'function' && easter_eggs && easter_eggs.length > 0) {
+          const eggMatch = checkForEasterEgg([v1.ingredients[0], v2.ingredients[0]]);
+          if (eggMatch) {
+            console.log("Found Easter egg that allows same-ingredient combination:", eggMatch.name);
+            // Allow the combination for easter eggs, but still return null to trigger easter egg display
+            displayEasterEgg(eggMatch, v1, v2);
+            moveHistory.push({type: 'easterEgg'});
+            return null; // Still return null to prevent vessel creation
+          }
+        }
+        return null; // Prevent same-ingredient combinations
+      }
       
-      // DUPLICATE INGREDIENT FIX: Use proper duplicate-aware recipe matching
-      let C_candidates = intermediate_combinations.filter(C => 
-        canFulfillRecipeRequirements(U, C.required)
-      );
+      let U = [...new Set([...v1.ingredients, ...v2.ingredients])];
+      let C_candidates = intermediate_combinations.filter(C => U.every(ing => C.required.includes(ing)));
       
       if (C_candidates.length > 0) {
         let C = C_candidates[0];

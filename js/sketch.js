@@ -132,6 +132,9 @@ let intermediate_combinations = [
   // Extract all individual ingredients (will be replaced with data from Supabase)
   let ingredients = [...new Set(intermediate_combinations.flatMap(c => c.required))];
   
+  // DUPLICATE INGREDIENT FIX: Global variable to track ingredient instances
+  let base_ingredient_instances = []; // Will store ingredient instances with metadata
+  
   // Global variables
   let gameWon = false;
   let gameStarted = false; // Missing variable declaration - APlasker
@@ -617,7 +620,24 @@ let intermediate_combinations = [
       intermediate_combinations = recipeData.intermediateCombinations;
       final_combination = recipeData.finalCombination;
       easter_eggs = recipeData.easterEggs;
-      ingredients = recipeData.baseIngredients;
+      
+      // DUPLICATE INGREDIENT FIX: Use ingredient instances instead of deduplicated names
+      // This allows recipes to have multiple instances of the same ingredient
+      if (recipeData.baseIngredientInstances && recipeData.baseIngredientInstances.length > 0) {
+        ingredients = recipeData.baseIngredientInstances.map(inst => inst.name); // Create one vessel per instance
+        base_ingredient_instances = recipeData.baseIngredientInstances; // Store instances for combination logic
+        console.log("Using ingredient instances:", base_ingredient_instances.length, "instances");
+      } else {
+        // Fallback to old method for backward compatibility
+        ingredients = recipeData.baseIngredients;
+        base_ingredient_instances = recipeData.baseIngredients.map((name, index) => ({
+          name: name,
+          instanceId: `${name}_fallback_${index}`,
+          validCombos: [] // Will be populated by combination logic
+        }));
+        console.log("Using fallback ingredient system");
+      }
+      
       base_ingredients = recipeData.baseIngredients; // Ensure base_ingredients is set for stats
       recipeUrl = recipeData.recipeUrl;
       recipeDescription = recipeData.description || "A delicious recipe that's sure to please everyone at the table!";
@@ -970,8 +990,25 @@ let intermediate_combinations = [
       intermediate_combinations = recipeData.intermediateCombinations;
       final_combination = recipeData.finalCombination;
       easter_eggs = recipeData.easterEggs;
-      ingredients = recipeData.baseIngredients;
-      base_ingredients = recipeData.baseIngredients;
+      
+      // DUPLICATE INGREDIENT FIX: Use ingredient instances instead of deduplicated names
+      // This allows recipes to have multiple instances of the same ingredient
+      if (recipeData.baseIngredientInstances && recipeData.baseIngredientInstances.length > 0) {
+        ingredients = recipeData.baseIngredientInstances.map(inst => inst.name); // Create one vessel per instance
+        base_ingredient_instances = recipeData.baseIngredientInstances; // Store instances for combination logic
+        console.log("Using ingredient instances:", base_ingredient_instances.length, "instances");
+      } else {
+        // Fallback to old method for backward compatibility
+        ingredients = recipeData.baseIngredients;
+        base_ingredient_instances = recipeData.baseIngredients.map((name, index) => ({
+          name: name,
+          instanceId: `${name}_fallback_${index}`,
+          validCombos: [] // Will be populated by combination logic
+        }));
+        console.log("Using fallback ingredient system");
+      }
+      
+      base_ingredients = recipeData.baseIngredients; // Ensure base_ingredients is set for stats
       recipeUrl = recipeData.recipeUrl;
       recipeDescription = recipeData.description || "A tutorial recipe to help you learn the game!";
       recipeAuthor = recipeData.author || "Tutorial";
@@ -1132,8 +1169,25 @@ let intermediate_combinations = [
       intermediate_combinations = recipeData.intermediateCombinations;
       final_combination = recipeData.finalCombination;
       easter_eggs = recipeData.easterEggs;
-      ingredients = recipeData.baseIngredients;
-      base_ingredients = recipeData.baseIngredients;
+      
+      // DUPLICATE INGREDIENT FIX: Use ingredient instances instead of deduplicated names
+      // This allows recipes to have multiple instances of the same ingredient
+      if (recipeData.baseIngredientInstances && recipeData.baseIngredientInstances.length > 0) {
+        ingredients = recipeData.baseIngredientInstances.map(inst => inst.name); // Create one vessel per instance
+        base_ingredient_instances = recipeData.baseIngredientInstances; // Store instances for combination logic
+        console.log("Using ingredient instances:", base_ingredient_instances.length, "instances");
+      } else {
+        // Fallback to old method for backward compatibility
+        ingredients = recipeData.baseIngredients;
+        base_ingredient_instances = recipeData.baseIngredients.map((name, index) => ({
+          name: name,
+          instanceId: `${name}_fallback_${index}`,
+          validCombos: [] // Will be populated by combination logic
+        }));
+        console.log("Using fallback ingredient system");
+      }
+      
+      base_ingredients = recipeData.baseIngredients; // Ensure base_ingredients is set for stats
       recipeUrl = recipeData.recipeUrl;
       recipeDescription = recipeData.description || "A delicious recipe that's sure to please everyone at the table!";
       recipeAuthor = recipeData.author || "";
@@ -1193,8 +1247,25 @@ let intermediate_combinations = [
       intermediate_combinations = recipeData.intermediateCombinations;
       final_combination = recipeData.finalCombination;
       easter_eggs = recipeData.easterEggs;
-      ingredients = recipeData.baseIngredients;
-      base_ingredients = recipeData.baseIngredients;
+      
+      // DUPLICATE INGREDIENT FIX: Use ingredient instances instead of deduplicated names
+      // This allows recipes to have multiple instances of the same ingredient
+      if (recipeData.baseIngredientInstances && recipeData.baseIngredientInstances.length > 0) {
+        ingredients = recipeData.baseIngredientInstances.map(inst => inst.name); // Create one vessel per instance
+        base_ingredient_instances = recipeData.baseIngredientInstances; // Store instances for combination logic
+        console.log("Using ingredient instances:", base_ingredient_instances.length, "instances");
+      } else {
+        // Fallback to old method for backward compatibility
+        ingredients = recipeData.baseIngredients;
+        base_ingredient_instances = recipeData.baseIngredients.map((name, index) => ({
+          name: name,
+          instanceId: `${name}_fallback_${index}`,
+          validCombos: [] // Will be populated by combination logic
+        }));
+        console.log("Using fallback ingredient system");
+      }
+      
+      base_ingredients = recipeData.baseIngredients; // Ensure base_ingredients is set for stats
       recipeUrl = recipeData.recipeUrl;
       recipeDescription = recipeData.description || "A delicious recipe that's sure to please everyone at the table!";
       recipeAuthor = recipeData.author || "";
@@ -1370,10 +1441,28 @@ let intermediate_combinations = [
     console.log(`Setting layout type to ${currentLayoutType} based on ${ingredients.length} ingredients`);
 
     // Create vessels for each ingredient
-    ingredients.forEach((ing) => {
-      let v = new Vessel([ing], [], null, 'white', 0, 0, 0, 0); // Size will be set in arrangeVessels
-      vessels.push(v);
-    });
+    // DUPLICATE INGREDIENT FIX: Create vessels with instance tracking
+    if (base_ingredient_instances && base_ingredient_instances.length > 0) {
+      // Create one vessel per ingredient instance
+      base_ingredient_instances.forEach((instance, index) => {
+        let v = new Vessel([instance.name], [], null, 'white', 0, 0, 0, 0); // Size will be set in arrangeVessels
+        
+        // DUPLICATE INGREDIENT FIX: Add instance tracking to vessel
+        v.ingredientInstance = instance; // Store the full instance data
+        v.instanceId = instance.instanceId; // Quick access to instance ID
+        v.validCombos = [...instance.validCombos]; // Which combos this vessel can participate in
+        
+        vessels.push(v);
+      });
+      console.log("Created", vessels.length, "vessels with instance tracking");
+    } else {
+      // Fallback to old method for backward compatibility
+      ingredients.forEach((ing) => {
+        let v = new Vessel([ing], [], null, 'white', 0, 0, 0, 0); // Size will be set in arrangeVessels
+        vessels.push(v);
+      });
+      console.log("Created", vessels.length, "vessels without instance tracking (fallback)");
+    }
     
     // Initialize byline transition variables - APlasker
     nextByline = "";
