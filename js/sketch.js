@@ -1,7 +1,11 @@
-// Culinary Logic Puzzle - Version v0.0603.01
-// Created: March 6, 2025
-// Last Updated: March 6, 2025
-
+/*
+ * Culinary Logic Puzzle v20250623.1930PM.EDT
+ * Created by APlasker
+ * Last Updated: June 23, 2025 (7:30 PM EDT) by APlasker - Future-proofed enhanced streak system with complete migration support.
+ *
+ * A daily culinary logic puzzle game where players combine ingredients
+ * according to recipe logic to create a final dish.
+ */
 // Define intermediate combinations (will be replaced with data from Supabase)
 let intermediate_combinations = [
     { name: "Fried Chicken Cutlet", required: ["Chicken Cutlet", "Flour", "Eggs", "Panko Bread Crumbs"] },
@@ -12,27 +16,162 @@ let intermediate_combinations = [
   // Define the final combination (will be replaced with data from Supabase)
   let final_combination = { name: "Chicken Parm", required: ["Fried Chicken Cutlet", "Tomato Sauce", "Mixed Cheeses"] };
   
+  // Define easter eggs (will be replaced with data from Supabase)
+  let easter_eggs = [];
+  
+  // Flag to track if an Easter egg was found (prevents invalid combination handling)
+  let eggFound = false;
+  
+  // Game state variables
+  let gameState = "start"; // start, tutorial, playing, win
+  let vessels = [];
+  let columns = []; // All vessels in each column (for checking combinations)
+  let draggedVessel = null;
+  let offsetX = 0;
+  let offsetY = 0;
+  let moveCount = 0;
+  let moveHistory = [];
+  let displayedVessels = []; // Track all vessels to display
+  let usedIngredients = new Set(); // Track ingredients used in combinations
+  let combine_animations = [];
+  let playingTime = 0; // Total time played in seconds
+  let startTime = 0; // Timestamp when game started
+  let gameTimer = 0; // Current game time in seconds
+  let gameTimerActive = false; // Whether the timer is currently running
+  let tutorialStep = 1;
+  let tutorialVessels = [];
+  let startButton;
+  let continueButton;
+  let skipTutorialButton;
+  let lastHintTime = 0; // Track when the last hint was requested
+  let hintCooldown = 500; // 0.5 second cooldown between hints (in milliseconds)
+  let hintButton;
+  let isMobile = false;
+  let hintButtonY; // Position of the hint button 
+  let initialHintButtonY; // New variable to store the initial hint button position
+  let preferredVessel = null;
+  let highlightedVessel = null;
+  let flowerRotation = 0;
+  let eggModals = [];
+  let persistentFlowerAnimation = null; // New global variable for persistent flower animation
+  let activePartialCombo = null; // Track the currently active partial combination
+  let partialCombinations = []; // Track all partial combinations that have been started
+  let autoFinalCombination = false; // Flag for automatic final combination sequence - APlasker
+  let autoFinalCombinationStarted = false; // Flag to track if sequence has started - APlasker
+  let autoFinalCombinationTimer = 0; // Timer for sequencing combinations - APlasker
+  let autoFinalCombinationState = "WAITING"; // State machine for enhanced auto combination - APlasker
+  let finalCombinationVessels = []; // Track vessels that are part of the final combination - APlasker
+  let autoFinalCombinationCenter = {x: 0, y: 0}; // Center point for vessels to move toward - APlasker
+  let autoFinalCombinationShakeDuration = 30; // 0.5 seconds at 60fps for shake animation - APlasker
+  let startedCombinations = []; // Track all combos that have ever been started (partial or completed) - APlasker
+  
+  // Profile state variables - APlasker
+  window.profileActive = false; // Whether profile screen is currently active - made global
+  window.previousProfileState = 'title'; // Track where user came from: 'title' or 'win' - made global
+  
+  // Byline state variables - APlasker
+  let currentByline = "Drop one ingredient on to another to combine!"; // Updated default byline - APlasker
+  let nextByline = ""; // Store the upcoming byline message
+  let bylineTimer = 0; // Timer for temporary bylines, counts down frames
+  let bylineHintDuration = 210; // 7 seconds at 30fps - temporary byline display duration
+  let lastAction = 0; // Track the last time the player took an action
+  let inactivityReminderCount = 0; // Track how many inactivity reminders have been shown
+  let baseInactivityThreshold = 300; // 10 seconds at 30fps - base inactivity threshold (reduced from 600)
+  let bylineTransitionState = "stable"; // "stable", "fading-out", "changing", "fading-in"
+  let bylineOpacity = 255; // Opacity for fade effect
+  let bylineFadeFrames = 8; // Number of frames for fade transition at 30fps (reduced from 15)
+  let isTransitioning = false; // Flag to prevent interrupting transitions
+  let transitionDuration = 0; // Duration to display message after transition
+  
+  // APlasker: Define star colors
+  const STAR_YELLOW = '#FFD700'; // Gold-ish yellow
+  const STAR_GREY = '#808080';   // Standard grey
+  const STAR_OUTLINE = '#000000'; // Black
+  
+  // Success messages to display when combinations are created - APlasker
+  const successMessages = [
+    "Smells good!", 
+    "It's almost dinner time!", 
+    "I could eat", 
+    "Ooh whatcha makin?",
+    "The secret ingredient is love"
+  ];
+  
+  // Partial combo messages to display when yellow vessels are created - APlasker
+  const partialComboMessages = [
+    "Classic combination!",
+    "Those definitely go together",
+    "Ok now I'm getting hungry",
+    "Chop chop!",
+    "Aww they like each other"
+  ];
+  // Track if first partial combo has been created and which messages have been used
+  let firstPartialComboCreated = false;
+  let usedPartialComboMessages = [];
+  
+  // Error messages to display when incorrect combinations are attempted - APlasker
+  const errorMessages = [
+    "Something doesn't taste right",
+    "Yum but no",
+    "Need a peek at the recipe? Try a hint!",
+    "Keep combo and carry onbo",
+    "So close!",
+    "Oopsy daisy",
+    "What else can you add?"
+  ];
+  // Track error message state
+  let firstErrorOccurred = false;
+  let usedErrorMessages = [];
+  
+  // Store these vessel dimensions globally for consistent calculations
+  let basic_w, basic_h, vertical_margin;
+  
+  // Session streak tracking - APlasker
+  let sessionStartStreak = 0;
+  
   // Extract all individual ingredients (will be replaced with data from Supabase)
   let ingredients = [...new Set(intermediate_combinations.flatMap(c => c.required))];
   
   // Global variables
-  let vessels = [];
-  let draggedVessel = null;
-  let offsetX, offsetY;
   let gameWon = false;
+  let gameStarted = false; // Missing variable declaration - APlasker
   let turnCounter = 0;
-  let moveHistory = []; // Array to store move history with colors
   let animations = []; // Array to store active animations
   let titleFont, bodyFont, buttonFont;
   let recipeUrl = "https://www.bonappetit.com/recipe/chicken-parm"; // Will be replaced with data from Supabase
-  let hintButton;
-  let hintVessel = null;
-  let showingHint = false;
-  let gameStarted = false; // New variable to track game state
-  let startButton; // New button for start screen
-  let hintButtonY;
   let isLoadingRecipe = true; // Flag to track if we're still loading recipe data
   let loadingError = false; // Flag to track if there was an error loading recipe data
+  let recipeDescription = "A delicious recipe that's sure to please everyone at the table!"; // New variable to store recipe description
+  let recipeAuthor = ""; // New variable to store recipe author
+  let hintCount = 0; // Track number of hints used
+  let isAPlus = false; // Whether the player earned an A+ grade
+  let letterGrade; // Player's letter grade (A, B, C, X)
+  let recipeImage; // Global variable to store the loaded recipe image
+  let isLoadingImage = false; // Track if we're in the process of loading an image
+  
+  // Global variables for score display and interaction
+  let scoreX, scoreY, scoreWidth, scoreHeight;
+  let isMouseOverLetterScore = false;
+  let recipe_data; // Global variable for recipe data
+  
+  // Global flag to track if any modal is currently active
+  let modalActive = false;
+  
+  // Global variable for wallpaper SVG - APlasker
+  let wallpaperSVG;
+  let wallpaperSVGHighRes; // High-resolution version for crisp rendering - APlasker
+  let wallpaperAnimation; // Global wallpaper animation instance - APlasker
+  let wallpaperHighResImage; // Final p5.js compatible image - APlasker
+  let wallpaperImageReady = false; // Track when wallpaper image is truly loaded - APlasker
+  let loadingComplete = false; // Track when loading is complete for split reveal - APlasker
+  let wallpaperAnimationActive = false; // Track if wallpaper animation is running - APlasker
+  
+  // Completion check state variables - APlasker
+  let completionCheckInProgress = false;
+  let completionCheckStartTime = 0;
+  let completionCheckTimeout = 5000; // 5 seconds
+  let showingCompletionError = false;
+  let completionErrorModal = null;
   
   // Play area constraints
   let maxPlayWidth = 400; // Max width for the play area (phone-sized)
@@ -41,85 +180,105 @@ let intermediate_combinations = [
   
   // Color palette
   const COLORS = {
-    background: '#F5F1E8',    // Soft cream background
-    primary: '#778F5D',       // Avocado green
-    secondary: '#D96941',     // Burnt orange
-    tertiary: '#E2B33C',      // Mustard yellow
+    background: '#f8f5f2',    // New unified background color
+    primary: '#9a9832',       // Changed from avocado green to olive green - APlasker
+    secondary: '#cf6d88',     // Changed from burnt orange to bright yellow - APlasker
+    tertiary: '#FFFFFF',      // White (previously changed from mustard yellow)
     accent: '#7A9BB5',        // Dusty blue
     text: '#333333',          // Dark gray for text
     vesselBase: '#F9F5EB',    // Cream white for base ingredients
-    vesselYellow: '#E2B33C',  // Mustard yellow for partial combinations
-    vesselGreen: '#778F5D',   // Avocado green for complete combinations
-    vesselHint: '#D96941'     // Burnt orange for hint vessels
+    vesselYellow: '#FFFFFF',  // White for partial combinations
+    vesselGreen: '#9a9832',   // Updated to match new primary color - APlasker
+    vesselHint: '#f7dc30',    // Changed from burnt orange to bright yellow - APlasker
+    green: '#9a9832',         // Updated to match new primary color - APlasker
+    peach: '#da9356',          // Updated orange color to #da9356 - APlasker
+    HintPink: '#cf6d88' 
   };
   
-  // Animation class for combining ingredients
-  class CombineAnimation {
-    constructor(x, y, color, targetX, targetY) {
-      this.x = x;
-      this.y = y;
-      this.targetX = targetX;
-      this.targetY = targetY;
-      this.color = color;
-      this.size = 30;
-      this.alpha = 255;
-      this.progress = 0;
-      this.duration = 30; // frames
-      this.sparkles = [];
+  // Array of colors for completed vessels - APlasker
+  const COMPLETED_VESSEL_COLORS = [
+    '#f3a9b2', // Light pink
+    '#cfc23f', // Mustard yellow
+    '#f7dc30', // Bright yellow
+    '#cf6d88', // Pink
+    '#dd9866'  // Peach/orange - Updated to be tertiary color - APlasker
+  ];
+  
+  // Track which colors have been used for completed vessels - APlasker
+  let usedCompletedVesselColors = [];
+  
+  // Track completed green vessels for combo counter - APlasker
+  let completedGreenVessels = [];
+  
+  // Function to get the next available color for completed vessels - APlasker
+  function getNextCompletedVesselColor(comboName) {
+    // Position-based color assignment: Find the position of this combo in the recipe steps
+    if (comboName) {
+      let position = -1;
       
-      // Create sparkles
-      for (let i = 0; i < 15; i++) {
-        this.sparkles.push({
-          x: random(-20, 20),
-          y: random(-20, 20),
-          size: random(3, 8),
-          speed: random(0.5, 2),
-          angle: random(TWO_PI)
-        });
+      // Find position in intermediate combinations
+      for (let i = 0; i < intermediate_combinations.length; i++) {
+        if (intermediate_combinations[i].name === comboName) {
+          position = i;
+          break;
+        }
+      }
+      
+      // If it's the final combination, use the last position
+      if (comboName === final_combination.name) {
+        position = intermediate_combinations.length;
+      }
+      
+      // Use position to select the color if found
+      if (position >= 0) {
+        const color = COMPLETED_VESSEL_COLORS[position % COMPLETED_VESSEL_COLORS.length];
+        
+        // Don't log or modify usedCompletedVesselColors when called for highlight lookups
+        // This function can be called either for:
+        // 1. Creating a new vessel (where we track used colors)
+        // 2. Just getting the color for recipe card highlight (where we don't track)
+        
+        // Check if this is a direct vessel creation call or just a preview/highlight call
+        if (typeof gameWon !== 'undefined' && gameStarted && !gameWon) {
+          // Only track used colors when game is actively running and we're creating actual vessels
+          if (!usedCompletedVesselColors.includes(color)) {
+            // Only add to used colors during actual vessel creation, not for highlights
+            console.log(`Assigned position-based color for ${comboName}: ${color} (position ${position})`);
+          }
+        }
+        
+        return color;
       }
     }
     
-    update() {
-      this.progress += 1 / this.duration;
-      if (this.progress >= 1) {
-        return true; // Animation complete
-      }
-      
-      // Update sparkles
-      for (let sparkle of this.sparkles) {
-        sparkle.x += cos(sparkle.angle) * sparkle.speed;
-        sparkle.y += sin(sparkle.angle) * sparkle.speed;
-        sparkle.size *= 0.95;
-      }
-      
-      return false;
+    // Fallback to original color cycling behavior if no combo name provided or position not found
+    // If all colors have been used, reset the used colors array
+    if (usedCompletedVesselColors.length >= COMPLETED_VESSEL_COLORS.length) {
+      console.log("All vessel colors have been used, recycling colors");
+      usedCompletedVesselColors = [];
     }
     
-    draw() {
-      // Easing function for smooth animation
-      let t = this.progress;
-      let easedT = t < 0.5 ? 4 * t * t * t : 1 - pow(-2 * t + 2, 3) / 2;
-      
-      // Calculate current position
-      let currentX = lerp(this.x, this.targetX, easedT);
-      let currentY = lerp(this.y, this.targetY, easedT);
-      
-      // Draw main particle
-      noStroke();
-      fill(this.color);
-      ellipse(currentX, currentY, this.size * (1 - this.progress * 0.5));
-      
-      // Draw sparkles
-      for (let sparkle of this.sparkles) {
-        fill(this.color);
-        ellipse(currentX + sparkle.x, currentY + sparkle.y, sparkle.size);
+    // Find the first unused color
+    for (let color of COMPLETED_VESSEL_COLORS) {
+      if (!usedCompletedVesselColors.includes(color)) {
+        // Mark this color as used
+        usedCompletedVesselColors.push(color);
+        console.log(`Assigned vessel color (fallback method): ${color}`);
+        return color;
       }
     }
+    
+    // Fallback to the first color if something goes wrong
+    console.log("Fallback to first color in vessel color array");
+    return COMPLETED_VESSEL_COLORS[0];
   }
+  
+  // Animation class for combining ingredients
+  // CLASS DEFINITIONS FOR CombineAnimation, VesselMovementAnimation, VerbAnimation REMOVED FROM HERE
   
   // Button class for UI elements
   class Button {
-    constructor(x, y, w, h, label, action, color = COLORS.primary, textColor = 'white') {
+    constructor(x, y, w, h, label, action, color = COLORS.primary, textColor = 'white', borderColor = null) {
       this.x = x;
       this.y = y;
       this.w = w;
@@ -129,40 +288,101 @@ let intermediate_combinations = [
       this.color = color;
       this.textColor = textColor;
       this.hovered = false;
+      this.disabled = false;
+      this.borderColor = null; // Always null by default now
+      this.textBold = false;
+      this.isCircular = false; // Default to false for consistent rounded rectangle shape
+      this.textSizeMultiplier = 1.0;
+      this.useVesselStyle = false;
+      this.simplifiedOutline = false;
+      this.outlineColor = COLORS.peach;
+      this.customCornerRadius = null;
     }
     
     draw() {
-      // Draw button
+      // Isolate drawing context for the button
+      push();
+      
+      // Calculate relative values for visual elements
+      const cornerRadius = this.customCornerRadius !== null ? this.customCornerRadius : Math.max(this.w * 0.15, 10);
+      const strokeW = Math.max(this.w * 0.025, 2);
+      
       rectMode(CENTER);
-      if (this.hovered) {
+      if (this.disabled) {
+        let buttonColor = color(this.color);
+        buttonColor.setAlpha(128);
+        fill(buttonColor);
+      } else if (this.hovered) {
         fill(lerpColor(color(this.color), color(255), 0.2));
       } else {
         fill(this.color);
       }
-      stroke(0, 50);
-      strokeWeight(3); // Increased line width for cartoony look
-      rect(this.x, this.y, this.w, this.h, 8);
+      
+      // Handle outline based on borderColor
+      if (this.borderColor) {
+        stroke(this.borderColor);
+        strokeWeight(Math.max(this.h * 0.04, 1.5)); // Match text weight, min 1.5px
+      } else {
+        noStroke();
+      }
+      
+      // Draw either a circle or rounded rectangle based on isCircular property
+      if (this.isCircular) {
+        circle(this.x, this.y, this.w);
+      } else {
+        rect(this.x, this.y, this.w, this.h, cornerRadius);
+      }
+      
+      // Calculate font size relative to button height, applying the text size multiplier
+      const fontSize = Math.max(this.h * 0.3 * this.textSizeMultiplier, 7); // 30% of button height * multiplier, minimum 7px
+      textSize(fontSize);
       
       // Draw label
-      fill(this.textColor);
+      if (this.disabled) {
+        // Use 50% opacity for text too
+        let textCol = color(this.textColor);
+        textCol.setAlpha(128);
+        fill(textCol);
+      } else {
+        fill(this.textColor);
+      }
       noStroke();
       textAlign(CENTER, CENTER);
       textFont(buttonFont);
-      textSize(16);
+      
+      // Apply bold text style if specified
+      if (this.textBold) {
+        textStyle(BOLD);
+      } else {
+        textStyle(NORMAL);
+      }
+      
       text(this.label, this.x, this.y);
+      
+      // Restore drawing context
+      pop();
     }
     
     isInside(x, y) {
-      return x > this.x - this.w/2 && x < this.x + this.w/2 && 
+      if (this.disabled) return false;
+      
+      if (this.isCircular) {
+        // For circular buttons, check if point is within circle
+        const distance = dist(x, y, this.x, this.y);
+        return distance <= this.w / 2;
+      } else {
+        // For rectangular buttons, use the standard boundary check
+        return x > this.x - this.w/2 && x < this.x + this.w/2 && 
              y > this.y - this.h/2 && y < this.y + this.h/2;
+      }
     }
     
     checkHover(x, y) {
-      this.hovered = this.isInside(x, y);
+      this.hovered = !this.disabled && this.isInside(x, y);
     }
     
     handleClick() {
-      if (this.hovered) {
+      if (!this.disabled && this.hovered) {
         this.action();
         return true;
       }
@@ -170,262 +390,98 @@ let intermediate_combinations = [
     }
   }
   
-  // Hint Vessel class - extends Vessel with hint-specific functionality
-  class HintVessel {
-    constructor(combo) {
-      this.name = combo.name;
-      this.required = combo.required;
-      this.collected = [];
-      // Position the hint vessel exactly over the hint button
-      this.x = width * 0.5; // Same x as hint button
-      this.y = hintButtonY; // Exactly at the hint button's position
-      this.w = 250;
-      this.h = 120;
-      this.color = COLORS.vesselHint;
-      this.scale = 1;
-      this.targetScale = 1;
-    }
-    
-    update() {
-      // Scale animation
-      this.scale = lerp(this.scale, this.targetScale, 0.2);
-    }
-    
-    draw() {
-      push();
-      translate(this.x, this.y);
-      scale(this.scale);
-      
-      // Draw pot handles (small circles) BEHIND the main shape
-      fill('#888888');
-      stroke('black');
-      strokeWeight(3);
-      // Position handles slightly lower and half-overlapping with the main shape
-      // Move handles a bit past the edge of the pot
-      circle(-this.w * 0.4, -this.h * 0.15, this.h * 0.2);
-      circle(this.w * 0.4, -this.h * 0.15, this.h * 0.2);
-      
-      // Draw vessel (pot body)
-      fill(this.color);
-      stroke('black');
-      strokeWeight(3);
-      
-      // Draw pot body (3:2 rectangle with rounded corners ONLY at the bottom)
-      rectMode(CENTER);
-      rect(0, 0, this.w * 0.8, this.h * 0.6, 0, 0, 10, 10);
-      
-      // Draw combo name
-      fill('white');
-      noStroke();
-      textAlign(CENTER, CENTER);
-      textSize(14);
-      text(this.name, 0, -this.h * 0.1);
-      
-      // Draw progress indicator
-      textSize(16);
-      text(`${this.collected.length}/${this.required.length}`, 0, this.h * 0.1);
-      
-      pop();
-    }
-    
-    isInside(x, y) {
-      return x > this.x - this.w / 2 && x < this.x + this.w / 2 && 
-             y > this.y - this.h / 2 && y < this.y + this.h / 2;
-    }
-    
-    addIngredient(ingredient) {
-      if (this.required.includes(ingredient) && !this.collected.includes(ingredient)) {
-        this.collected.push(ingredient);
-        this.pulse();
-        return true;
-      }
-      return false;
-    }
-    
-    isComplete() {
-      return this.collected.length === this.required.length && 
-             this.required.every(ing => this.collected.includes(ing));
-    }
-    
-    pulse() {
-      this.targetScale = 1.2;
-      setTimeout(() => { this.targetScale = 1; }, 300);
-    }
-    
-    // Convert to a regular vessel when complete but keep it red
-    toVessel() {
-      let v = new Vessel([], [], this.name, COLORS.vesselHint, this.x, this.y, 200, 100);
-      v.isAdvanced = true; // Mark as advanced for proper rendering
-      v.pulse();
-      return v;
-    }
-  }
-  
-  class Vessel {
-    constructor(ingredients, complete_combinations, name, color, x, y, w, h) {
-      this.ingredients = ingredients;
-      this.complete_combinations = complete_combinations;
-      this.name = name;
-      
-      // Map color names to our new color palette
-      if (color === 'white') this.color = COLORS.vesselBase;
-      else if (color === 'yellow') this.color = COLORS.vesselYellow;
-      else if (color === 'green') this.color = COLORS.vesselGreen;
-      else if (color === '#FF5252') this.color = COLORS.vesselHint; // Hint vessel color
-      else this.color = color; // Use provided color if it doesn't match any of our mappings
-      
-      this.x = x;
-      this.y = y;
-      this.w = w;
-      this.h = h;
-      this.originalX = x;
-      this.originalY = y;
-      this.isAdvanced = color !== 'white'; // Yellow or green vessels are advanced
-      this.scale = 1; // For animation
-      this.targetScale = 1;
-    }
-  
-    getDisplayText() {
-      if (this.name != null) return this.name;
-      else if (this.ingredients.length > 0) return this.ingredients.join(" + ");
-      else return this.complete_combinations.join(" + ");
-    }
-  
-    isInside(x, y) {
-      return x > this.x - this.w / 2 && x < this.x + this.w / 2 && y > this.y - this.h / 2 && y < this.y + this.h / 2;
-    }
-  
-    snapBack() {
-      this.x = this.originalX;
-      this.y = this.originalY;
-    }
-    
-    update() {
-      // Scale animation only (removed floating animation)
-      this.scale = lerp(this.scale, this.targetScale, 0.2);
-    }
-    
-    draw() {
-      push();
-      translate(this.x, this.y);
-      scale(this.scale);
-      
-      if (this.isAdvanced) {
-        // Advanced vessel (pot or pan based on color)
-        
-        if (this.color === '#FF5252') {
-          // Red vessel (pot with two handles)
-          // Draw handles BEHIND the main shape
-          fill('#888888');
-          stroke('black');
-          strokeWeight(3);
-          // Position handles slightly lower and half-overlapping with the main shape
-          // Move handles a bit past the edge of the pot
-          circle(-this.w * 0.4, -this.h * 0.15, this.h * 0.2);
-          circle(this.w * 0.4, -this.h * 0.15, this.h * 0.2);
-        } else if (this.color === 'green') {
-          // Green vessel (pan with long handle)
-          // Draw handle BEHIND the main shape
-          fill('#888888');
-          stroke('black');
-          strokeWeight(3);
-          rectMode(CENTER);
-          // Draw handle as thin horizontal rectangle
-          rect(this.w * 0.6, 0, this.w * 0.5, this.h * 0.15, 5);
-        } else if (this.color === 'yellow') {
-          // Yellow vessel (pot with two handles like the red vessel)
-          // Draw handles BEHIND the main shape
-          fill('#888888');
-          stroke('black');
-          strokeWeight(3);
-          // Position handles slightly lower and half-overlapping with the main shape
-          // Move handles a bit past the edge of the pot
-          circle(-this.w * 0.4, -this.h * 0.15, this.h * 0.2);
-          circle(this.w * 0.4, -this.h * 0.15, this.h * 0.2);
-        }
-        
-        // Draw vessel body
-        fill(this.color);
-        stroke('black');
-        strokeWeight(3);
-        
-        // Draw vessel body (3:2 rectangle with rounded corners ONLY at the bottom)
-        rectMode(CENTER);
-        rect(0, 0, this.w * 0.8, this.h * 0.6, 0, 0, 10, 10);
-        
-      } else {
-        // Basic ingredient vessel (rectangle with extremely rounded bottom corners)
-        fill(this.color);
-        stroke('black');
-        strokeWeight(3);
-        
-        // Draw rounded rectangle
-        rectMode(CENTER);
-        rect(0, -this.h * 0.1, this.w * 0.8, this.h * 0.6, 5, 5, 30, 30);
-      }
-      
-      // Draw text inside the vessel
-      fill('black');
-      noStroke();
-      textAlign(CENTER, CENTER);
-      textSize(12);
-      
-      // Calculate text position to be inside the vessel
-      let displayText = this.getDisplayText();
-      let lines = splitTextIntoLines(displayText, this.w * 0.7);
-      
-      for (let i = 0; i < lines.length; i++) {
-        let yOffset = (i - (lines.length - 1) / 2) * 15;
-        // Position text slightly higher in the vessel
-        text(lines[i], 0, yOffset - this.h * 0.1);
-      }
-      
-      pop();
-    }
-    
-    pulse() {
-      this.targetScale = 1.2;
-      setTimeout(() => { this.targetScale = 1; }, 300);
-    }
-  }
-  
-  // Helper function to split text into lines that fit within a width
-  function splitTextIntoLines(text, maxWidth) {
-    let words = text.split(' ');
-    let lines = [];
-    let currentLine = words[0];
-    
-    for (let i = 1; i < words.length; i++) {
-      let testLine = currentLine + ' ' + words[i];
-      let testWidth = textWidth(testLine);
-      
-      if (testWidth > maxWidth) {
-        lines.push(currentLine);
-        currentLine = words[i];
-      } else {
-        currentLine = testLine;
-      }
-    }
-    
-    lines.push(currentLine);
-    return lines;
-  }
+  // Vessel class has been moved to js/modules/VesselSystem.js
+  // splitTextIntoLines function has been moved to js/modules/VesselSystem.js
   
   // Preload function to load assets before setup
   function preload() {
     console.log("Preloading assets...");
     
+    // Load wallpaper SVG using HTML5 Canvas for high-quality rendering - APlasker
+    console.log("🚀 Loading wallpaper SVG via HTML5 Canvas...");
+    loadWallpaperSVGHighRes();
+    
     // Use web-safe fonts directly instead of trying to load Google Fonts
-    titleFont = 'Georgia';
-    bodyFont = 'Arial';
-    buttonFont = 'Verdana';
+  titleFont = 'Courier, "Courier New", monospace';
+  bodyFont = 'Helvetica, Arial, sans-serif';
+  buttonFont = 'Helvetica, Arial, sans-serif';
     
     console.log("Using web-safe fonts instead of Google Fonts");
+  }
+  
+  // Function to load SVG at high resolution using HTML5 Canvas - APlasker
+  function loadWallpaperSVGHighRes() {
+    console.log("📐 Loading SVG via HTML5 Canvas for maximum quality...");
+    
+    // Create an image element to load the SVG
+    const img = new Image();
+    
+    img.onload = function() {
+      console.log("✅ SVG loaded as DOM image");
+      console.log(`📊 Natural SVG dimensions: ${img.naturalWidth}x${img.naturalHeight}`);
+      
+      // Create high-resolution canvas (4x natural size for crisp quality)
+      const hiResScale = 4;
+      const canvasWidth = Math.max(img.naturalWidth * hiResScale, 800); // Minimum 800px width
+      const canvasHeight = Math.max(img.naturalHeight * hiResScale, 600); // Minimum 600px height
+      
+      console.log(`🎯 Creating HTML5 canvas: ${canvasWidth}x${canvasHeight} (${hiResScale}x scale)`);
+      
+      // Create native HTML5 canvas
+      const canvas = document.createElement('canvas');
+      canvas.width = canvasWidth;
+      canvas.height = canvasHeight;
+      const ctx = canvas.getContext('2d');
+      
+      // Enable high-quality rendering
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      
+      // Draw SVG to canvas at high resolution
+      ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
+      
+      console.log("✅ SVG rendered to HTML5 canvas at high quality");
+      
+      // Convert canvas to p5.js compatible image
+      const dataURL = canvas.toDataURL('image/png');
+      
+      // Load the high-quality canvas as p5.js image
+      wallpaperHighResImage = loadImage(dataURL, 
+        function() {
+          console.log("🎨 High-resolution wallpaper converted to p5.js image successfully!");
+          console.log(`📐 Final p5.js image dimensions: ${wallpaperHighResImage.width}x${wallpaperHighResImage.height}`);
+          wallpaperImageReady = true; // Mark image as truly ready - APlasker
+          console.log("✅ Wallpaper image is now ready for animation");
+        },
+        function() {
+          console.log("❌ Failed to convert canvas to p5.js image");
+          wallpaperImageReady = false;
+        }
+      );
+    };
+    
+    img.onerror = function() {
+      console.log("❌ Failed to load SVG as DOM image");
+    };
+    
+    // Start loading the SVG
+    img.src = 'assets/wallpaper1.svg';
   }
   
   function setup() {
     createCanvas(windowWidth, windowHeight); // Fullscreen canvas for mobile
     textFont(bodyFont);
+    
+    // Initialize the touch system
+    touchSystem.init(); // MOVED to interaction.js
+    
+    // Explicitly assign p5.js mouse event handlers from interaction.js
+    // window.mousePressed = mousePressed; // Causing: mousePressed is not defined
+    // window.mouseDragged = mouseDragged;
+    // window.mouseReleased = mouseReleased;
+    
+    // Set frame rate to 30fps for consistent animation timing across devices
+    frameRate(30);
     
     // Calculate play area dimensions
     playAreaWidth = min(maxPlayWidth, windowWidth - 2 * playAreaPadding);
@@ -436,1227 +492,527 @@ let intermediate_combinations = [
     playAreaX = (windowWidth - playAreaWidth) / 2;
     playAreaY = (windowHeight - playAreaHeight) / 2;
     
-    // The actual game initialization will happen in initializeGame()
-    // after the recipe data is loaded
-    
-    // Load recipe data from Supabase if not in playtest mode
-    if (typeof isPlaytestMode === 'undefined' || !isPlaytestMode) {
-      loadRecipeData();
-    } else {
-      console.log("Playtest mode: waiting for date selection");
-      isLoadingRecipe = false; // In playtest mode, we'll load the recipe after date selection
+    // Initialize anonymous authentication automatically, then check completion
+    initializeAuth().then(() => {
+      // Check for any pending completion retries first
+      if (typeof retryPendingCompletions === 'function') {
+        retryPendingCompletions().catch(error => {
+          console.error('Error retrying pending completions:', error);
+        });
+      }
+      
+      // Small delay to ensure auth state is fully set
+      setTimeout(() => {
+        checkTodayCompletion();
+      }, 100);
+    }).catch((error) => {
+      console.error("Auth initialization failed:", error);
+      // Proceed with normal flow if auth fails
+      proceedWithNormalFlow();
+    });
+  }
+  
+  // Function to initialize authentication automatically
+  async function initializeAuth() {
+    try {
+      console.log('Initializing authentication...');
+      
+      // Check if user is already authenticated
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session?.user) {
+        // User is already authenticated
+        window.authState.user = session.user;
+        window.authState.isAnonymous = session.user.is_anonymous || false;
+        window.authState.isAuthenticated = true;
+        
+        console.log('Existing session found:', {
+          email: session.user.email,
+          isAnonymous: window.authState.isAnonymous
+        });
+        
+      } else {
+        // No existing session - sign in anonymously
+        console.log('No existing session, signing in anonymously...');
+        
+        const { data, error } = await supabase.auth.signInAnonymously();
+        
+        if (error) {
+          console.error('Anonymous sign-in failed:', error);
+          // Continue without auth - fallback mode
+          window.authState.user = null;
+          window.authState.isAnonymous = false;
+          window.authState.isAuthenticated = false;
+        } else {
+          // Anonymous sign-in successful
+          window.authState.user = data.user;
+          window.authState.isAnonymous = true;
+          window.authState.isAuthenticated = true;
+          
+          console.log('Anonymous sign-in successful:', data.user.id);
+        }
+      }
+      
+    } catch (error) {
+      console.error('Auth initialization error:', error);
+      // Continue without auth - fallback mode
+      window.authState.user = null;
+      window.authState.isAnonymous = false;
+      window.authState.isAuthenticated = false;
     }
   }
   
   // Function to load recipe data from Supabase
   async function loadRecipeData() {
     try {
-      console.log("Loading recipe data from Supabase...");
-      const recipeData = await fetchTodayRecipe();
+      // Add mobile-specific loading delay to prevent race conditions
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      if (isMobile) {
+        console.log("Mobile device detected - adding loading delay");
+        await new Promise(resolve => setTimeout(resolve, 500)); // 500ms delay for mobile
+      }
       
-      if (recipeData) {
-        // Update game variables with recipe data
-        intermediate_combinations = recipeData.intermediateCombinations;
-        final_combination = recipeData.finalCombination;
-        ingredients = recipeData.baseIngredients;
-        recipeUrl = recipeData.recipeUrl;
-        
-        console.log("Recipe data loaded successfully");
-        isLoadingRecipe = false;
+      // Check if there's a date parameter in the URL for playtesting
+      const urlParams = new URLSearchParams(window.location.search);
+      const testDate = urlParams.get('date');
+      
+      let recipeData;
+      if (testDate) {
+        console.log(`Playtesting recipe for date: ${testDate}`);
+        recipeData = await fetchRecipeByDate(testDate);
       } else {
-        throw new Error("Failed to process recipe data");
+        recipeData = await fetchTodayRecipe();
+      }
+      
+      if (!recipeData) {
+        console.error("No recipe data found");
+        // Don't set loadingError immediately - try again with retry logic
+        if (typeof loadRecipeRetryCount === 'undefined') {
+          window.loadRecipeRetryCount = 0;
+        }
+        
+        if (window.loadRecipeRetryCount < 3) {
+          window.loadRecipeRetryCount++;
+          console.log(`Recipe load failed, retrying (${window.loadRecipeRetryCount}/3)...`);
+          setTimeout(() => loadRecipeData(), 1000); // Retry after 1 second
+          return;
+        } else {
+          console.error("Recipe loading failed after 3 retries");
+          loadingError = true;
+          isLoadingRecipe = false;
+          loadingComplete = true;
+          return;
+        }
+      }
+      
+      console.log("Loading recipe data from Supabase...");
+      
+      // Store recipe data in the global variable
+      recipe_data = recipeData;
+      
+      // Store the recipe object globally for stats access
+      recipe = recipeData;
+      
+      // Update game variables with recipe data
+      intermediate_combinations = recipeData.intermediateCombinations;
+      final_combination = recipeData.finalCombination;
+      easter_eggs = recipeData.easterEggs;
+      ingredients = recipeData.baseIngredients;
+      base_ingredients = recipeData.baseIngredients; // Ensure base_ingredients is set for stats
+      recipeUrl = recipeData.recipeUrl;
+      recipeDescription = recipeData.description || "A delicious recipe that's sure to please everyone at the table!";
+      
+      // Get author information from the database if it exists
+      recipeAuthor = recipeData.author || "";
+      
+      console.log("Recipe data loaded successfully");
+      isLoadingRecipe = false;
+      loadingComplete = true; // Trigger split reveal - APlasker
+      
+      // Clean up wallpaper animation now that loading is complete - APlasker
+      if (typeof cleanupWallpaperAnimation === 'function') {
+        cleanupWallpaperAnimation();
+      }
+      
+      // Set data loaded flag to true for stats display
+      recipeDataLoadedForStats = true;
+      
+      // Initialize the game immediately with the essential data
+      initializeGame();
+      
+      // MODIFIED BY APLASKER: Load the image in the background AFTER game is initialized
+      if (recipeData.imgUrl) {
+        console.log("Loading recipe image in background from URL:", recipeData.imgUrl);
+        isLoadingImage = true;
+        
+        // Use loadImage with success and error callbacks
+        loadImage(
+          recipeData.imgUrl,
+          // Success callback
+          (img) => {
+            console.log("Recipe image loaded successfully");
+            recipeImage = img;
+            isLoadingImage = false;
+          },
+          // Error callback
+          (err) => {
+            console.error("Error loading recipe image:", err);
+            recipeImage = null; // Set to null to indicate loading failed
+            isLoadingImage = false;
+          }
+        );
       }
     } catch (error) {
       console.error("Error loading recipe data:", error);
+      
+      // Enhanced error handling for mobile
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      if (isMobile && error.message && error.message.includes('network')) {
+        console.log("Mobile network error detected - retrying...");
+        setTimeout(() => loadRecipeData(), 2000); // Retry after 2 seconds on mobile
+        return;
+      }
+      
       loadingError = true;
       isLoadingRecipe = false;
+      loadingComplete = true; // Trigger split reveal even on error - APlasker
+      isLoadingImage = false;
+      
+      // Clean up wallpaper animation - APlasker
+      if (typeof cleanupWallpaperAnimation === 'function') {
+        cleanupWallpaperAnimation();
+      }
+      
+      // Set data loaded flag to true even on error, so we can show the title screen
+      // with fallback values for the stats
+      recipeDataLoadedForStats = true;
     }
   }
   
-  // Fisher-Yates shuffle algorithm to randomize vessel order
-  function shuffleArray(array) {
-    for (let i = array.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [array[i], array[j]] = [array[j], array[i]];
-    }
-    return array;
-  }
-  
-  function arrangeVessels() {
-    // Calculate vessel sizes based on play area width to ensure 3 base vessels per row
-    // We need to fit 3 vessels plus margins in the play area width
-    let margin = 10;
-    let vertical_margin = 10;
-    
-    // Calculate basic vessel width to fit exactly 3 per row with margins
-    let basic_w = (playAreaWidth - (4 * margin)) / 3; // 3 vessels with margin on both sides
-    let basic_h = basic_w * 0.8; // Maintain aspect ratio
-    
-    // Advanced vessels are twice as wide
-    let advanced_w = basic_w * 2 + margin;
-    let advanced_h = basic_h * 1.2;
-    
-    // Adjust margins for very small screens
-    if (playAreaWidth < 300) {
-      margin = 5;
-      vertical_margin = 5;
-      // Recalculate with smaller margins
-      basic_w = (playAreaWidth - (4 * margin)) / 3;
-      basic_h = basic_w * 0.8;
-      advanced_w = basic_w * 2 + margin;
-      advanced_h = basic_h * 1.2;
-    }
+  //draw was here 4-17
 
-    // First, separate vessels into advanced and basic
-    let advancedVessels = vessels.filter(v => v.isAdvanced);
-    let basicVessels = vessels.filter(v => !v.isAdvanced);
-
-    // Create an array to hold our row arrangements
-    let rowArrangements = [];
-    
-    // Create rows with optimal arrangements
-    while (advancedVessels.length > 0 || basicVessels.length > 0) {
-      let currentRow = [];
-      
-      // Try to create rows with 1 advanced vessel and 1 basic vessel when possible
-      if (advancedVessels.length > 0 && basicVessels.length > 0) {
-        currentRow.push(advancedVessels.shift()); // Add 1 advanced vessel (takes 2 slots)
-        currentRow.push(basicVessels.shift()); // Add 1 basic vessel (takes 1 slot)
-        rowArrangements.push(currentRow);
-      }
-      // If we only have advanced vessels left, add 1 per row
-      else if (advancedVessels.length > 0) {
-        currentRow.push(advancedVessels.shift());
-        rowArrangements.push(currentRow);
-      }
-      // If we only have basic vessels left, add 3 per row (or fewer if that's all we have)
-      else if (basicVessels.length > 0) {
-        // Add up to 3 basic vessels
-        for (let i = 0; i < 3 && basicVessels.length > 0; i++) {
-          currentRow.push(basicVessels.shift());
-        }
-        rowArrangements.push(currentRow);
-      }
-    }
-
-    // Calculate the starting Y position
-    let startY = playAreaY + playAreaHeight * 0.2; // Position relative to play area
-
-    // Position all vessels based on row arrangements
-    rowArrangements.forEach((row, rowIndex) => {
-      // Calculate total width of this row
-      let rowWidth = row.reduce((width, v) => {
-        return width + (v.isAdvanced ? advanced_w : basic_w);
-      }, 0) + (row.length - 1) * margin;
-
-      // Calculate starting x position to center the row within the play area
-      let startX = playAreaX + (playAreaWidth - rowWidth) / 2;
-      let currentX = startX;
-
-      // Position each vessel in the row
-      row.forEach((v) => {
-        // Update vessel dimensions
-        if (v.isAdvanced) {
-          v.w = advanced_w;
-          v.h = advanced_h;
-        } else {
-          v.w = basic_w;
-          v.h = basic_h;
-        }
-
-        // Set vessel position
-        v.x = currentX + v.w / 2;
-        v.y = startY + rowIndex * (advanced_h + vertical_margin);
-        v.originalX = v.x;
-        v.originalY = v.y;
-
-        // Move x position for next vessel
-        currentX += v.w + margin;
-      });
-    });
-    
-    // Calculate the lowest vessel position for hint button placement
-    let lowestY = startY;
-    vessels.forEach(v => {
-      lowestY = Math.max(lowestY, v.y + v.h/2);
-    });
-    
-    // Set hint button position 20 pixels below the lowest vessel
-    hintButtonY = lowestY + 20;
-    
-    // Ensure the hint button stays within the play area
-    hintButtonY = Math.min(hintButtonY, playAreaY + playAreaHeight - 60);
-  }
-  
-  function draw() {
-    background(COLORS.background);
-    
-    // Draw the floral pattern border
-    drawFloralBorder();
-    
-    // Ensure no stroke for all text elements
-    noStroke();
-    
-    // Check if we're still loading recipe data
-    if (isLoadingRecipe) {
-      // Display loading screen
-      textAlign(CENTER, CENTER);
-      textSize(24);
-      fill(0);
-      text("Loading today's recipe...", width/2, height/2);
-      
-      // Display current time in EST for debugging
-      textSize(14);
-      const estTime = getCurrentESTTime();
-      text(`Current time (EST): ${estTime}`, width/2, height/2 + 40);
-      
-      return;
-    }
-    
-    // Check if there was an error loading recipe data
-    if (loadingError) {
-      textAlign(CENTER, CENTER);
-      textSize(24);
-      fill(255, 0, 0);
-      text("Error loading recipe. Using default recipe.", width/2, height/2 - 30);
-      textSize(16);
-      text("Please check your internet connection and refresh the page.", width/2, height/2 + 10);
-      
-      // Display current time in EST for debugging
-      textSize(14);
-      const estTime = getCurrentESTTime();
-      text(`Current time (EST): ${estTime}`, width/2, height/2 + 40);
-      
-      // After 3 seconds, continue with default recipe
-      if (frameCount % 180 === 0) {
-        loadingError = false;
-        // Initialize the game with default recipe data
-        initializeGame();
-      }
-      return;
-    }
-    
-    // Check if we need to initialize the game after loading data
-    if (vessels.length === 0) {
-      initializeGame();
-      return;
-    }
-    
-    // Draw title
-    drawTitle();
-    
-    if (!gameStarted) {
-      // Draw start screen with animated demo
-      drawStartScreen();
-    } else if (gameWon) {
-      // Draw win screen
-      drawWinScreen();
-    } else {
-      // Draw game screen
-      // Update all vessels
-      vessels.forEach(v => {
-        v.update();
-      });
-      
-      // Sort vessels by type to ensure advanced vessels are drawn first (behind basic vessels)
-      let sortedVessels = [...vessels].sort((a, b) => {
-        if (a.isAdvanced && !b.isAdvanced) return -1;
-        if (!a.isAdvanced && b.isAdvanced) return 1;
-        return 0;
-      });
-      
-      // Draw all vessels in sorted order
-      sortedVessels.forEach(v => {
-        v.draw();
-      });
-      
-      // Draw hint button or hint vessel
-      if (showingHint && hintVessel) {
-        hintVessel.update();
-        hintVessel.draw();
-      } else {
-        hintButton.draw();
-      }
-      
-      // Draw animations
-      for (let i = animations.length - 1; i >= 0; i--) {
-        animations[i].draw();
-        if (animations[i].update()) {
-          animations.splice(i, 1);
-        }
-      }
-      
-      // Draw move history
-      drawMoveHistory();
-    }
-    
-    // Update cursor if hovering over a vessel or button
-    updateCursor();
-  }
-  
-  function drawTitle() {
-    push();
-    textFont(titleFont);
-    textSize(48);
-    textAlign(CENTER, CENTER);
-    fill(COLORS.primary);
-    noStroke(); // Ensure no stroke is applied to the text
-    text("Combo Meal", width / 2, 60);
-    
-    textFont(bodyFont);
-    textSize(16);
-    fill(COLORS.text);
-    noStroke(); // Ensure no stroke is applied to the text
-    text("Reveal a new recipe every day!", width / 2, 100);
-    pop();
-  }
-  
-  function drawStartScreen() {
-    // Adjust header size based on available space
-    let headerSize = 28;
-    let descriptionSize = 14;
-    
-    // Scale down based on play area width
-    if (playAreaWidth < 380) {
-      headerSize = 24;
-      descriptionSize = 12;
-    }
-    if (playAreaWidth < 340) {
-      headerSize = 20;
-      descriptionSize = 10;
-    }
-    
-    // Draw "How to play:" header - position relative to play area
-    textAlign(CENTER);
-    textSize(headerSize);
-    fill('#333');
-    text("How to play:", playAreaX + playAreaWidth/2, playAreaY + playAreaHeight * 0.12);
-    
-    // Draw the three equations with more compact spacing
-    // Position relative to play area
-    drawTutorialEquation(1, "Grapes", "white", "Sugar", "white", "Jelly", "green", 
-                        "Combine ingredients to make new ones!", 
-                        playAreaY + playAreaHeight * 0.25, false, descriptionSize);
-    
-    drawTutorialEquation(2, "Jelly", "green", "Peanut Butter", "white", "Jelly + Peanut Butter", "yellow", 
-                        "Partial combos turn yellow. Add more ingredients!", 
-                        playAreaY + playAreaHeight * 0.45, false, descriptionSize);
-    
-    drawTutorialEquation(3, "Jelly + Peanut Butter", "yellow", "Potato Bread", "green", "PB&J Sandwich", "green", 
-                        "Solve the recipe in as few moves as you can!", 
-                        playAreaY + playAreaHeight * 0.65, true, descriptionSize);
-    
-    // Position start button relative to play area
-    startButton.x = playAreaX + playAreaWidth/2;
-    startButton.y = playAreaY + playAreaHeight * 0.85;
-    startButton.draw();
-    startButton.checkHover(mouseX, mouseY);
-    
-    // Draw version number at the very bottom
-    push();
-    textSize(8);
-    fill(100, 100, 100, 180); // Semi-transparent gray
-    text("v0.0603.01", playAreaX + playAreaWidth/2, playAreaY + playAreaHeight - 5);
-    pop();
-  }
-  
-  // Function to draw tutorial equations
-  function drawTutorialEquation(equationNum, leftName, leftColor, rightName, rightColor, resultName, resultColor, description, yPosition, showStarburst = false, descriptionSize = 16) {
-    // Adjust vessel sizes based on play area width
-    let vesselWidth = min(70, playAreaWidth * 0.15);
-    let vesselHeight = vesselWidth * 0.6;
-    let operatorSize = min(24, playAreaWidth * 0.06);
-    
-    // Calculate positions relative to play area
-    const spacing = playAreaWidth * 0.2;
-    const leftX = playAreaX + playAreaWidth * 0.25;
-    const rightX = playAreaX + playAreaWidth * 0.5;
-    const resultX = playAreaX + playAreaWidth * 0.75;
-    
-    // Operator positions
-    const operatorX1 = (leftX + rightX) / 2;
-    const operatorX2 = (rightX + resultX) / 2;
-    
-    // Draw left vessel
-    drawTutorialVessel(leftX, yPosition, leftName, leftColor, vesselWidth, vesselHeight);
-    
-    // Draw plus sign
-    textAlign(CENTER, CENTER);
-    textSize(operatorSize);
-    fill('#333');
-    noStroke();
-    text("+", operatorX1, yPosition);
-    
-    // Draw right vessel
-    drawTutorialVessel(rightX, yPosition, rightName, rightColor, vesselWidth, vesselHeight);
-    
-    // Draw equals sign
-    textAlign(CENTER, CENTER);
-    textSize(operatorSize);
-    fill('#333');
-    noStroke();
-    text("=", operatorX2, yPosition);
-    
-    // Draw result vessel with optional starburst
-    if (showStarburst) {
-      drawStarburst(resultX, yPosition);
-    }
-    drawTutorialVessel(resultX, yPosition, resultName, resultColor, vesselWidth, vesselHeight);
-    
-    // Draw description with improved spacing
-    textAlign(CENTER); // Center align all descriptions for better fit
-    textSize(descriptionSize);
-    fill('#333');
-    
-    // Position description below the equation
-    text(description, playAreaX + playAreaWidth/2, yPosition + vesselHeight * 0.9);
-  }
-  
-  // New function to draw tutorial vessels
-  function drawTutorialVessel(x, y, name, color, vesselWidth, vesselHeight) {
-    push();
-    translate(x, y);
-    
-    // Draw vessel
-    if (color === "white") {
-      // Basic ingredient vessel (white)
-      fill('white');
-      stroke('black');
-      strokeWeight(2);
-      
-      // Draw rounded rectangle
-      rectMode(CENTER);
-      rect(0, 0, vesselWidth, vesselHeight, 5, 5, 30, 30);
-    } else if (color === "yellow") {
-      // Draw handles behind the vessel
-      fill('#888888');
-      stroke('black');
-      strokeWeight(2);
-      circle(-vesselWidth * 0.4, -5, 15);
-      circle(vesselWidth * 0.4, -5, 15);
-      
-      // Yellow vessel (partial combination)
-      fill(COLORS.tertiary); // Mustard yellow
-      stroke('black');
-      strokeWeight(2);
-      
-      // Draw rectangle with rounded corners
-      rectMode(CENTER);
-      rect(0, 0, vesselWidth, vesselHeight, 0, 0, 10, 10);
-    } else if (color === "green") {
-      // Draw handle behind the vessel
-      fill('#888888');
-      stroke('black');
-      strokeWeight(2);
-      rectMode(CENTER);
-      rect(vesselWidth * 0.6, 0, vesselWidth * 0.5, vesselHeight * 0.15, 5);
-      
-      // Green vessel (complete combination)
-      fill(COLORS.primary); // Avocado green
-      stroke('black');
-      strokeWeight(2);
-      
-      // Draw rectangle with rounded corners
-      rectMode(CENTER);
-      rect(0, 0, vesselWidth, vesselHeight, 0, 0, 10, 10);
-    }
-    
-    // Draw text
-    fill('black');
-    noStroke();
-    textAlign(CENTER, CENTER);
-    textSize(12);
-    
-    // Split text into lines if needed
-    let lines = splitTextIntoLines(name, vesselWidth * 0.7);
-    for (let i = 0; i < lines.length; i++) {
-      let yOffset = (i - (lines.length - 1) / 2) * 15;
-      text(lines[i], 0, yOffset);
-    }
-    
-    pop();
-  }
-  
-  // New function to draw starburst behind final vessel
-  function drawStarburst(x, y) {
-    push();
-    translate(x, y);
-    
-    // Draw subtle yellow starburst
-    fill(COLORS.tertiary + '80'); // Mustard yellow with 50% opacity
-    noStroke();
-    
-    // Draw an 8-point star
-    beginShape();
-    for (let i = 0; i < 16; i++) {
-      let radius = i % 2 === 0 ? 70 : 50;
-      let angle = TWO_PI * i / 16 - PI/16;
-      let px = cos(angle) * radius;
-      let py = sin(angle) * radius;
-      vertex(px, py);
-    }
-    endShape(CLOSE);
-    
-    pop();
-  }
-  
-  function drawWinScreen() {
-    // Draw title
-    drawTitle();
-    
-    // Center all content within the play area
-    textAlign(CENTER, CENTER);
-    
-    // Draw "YOU MADE IT!" text
-    textSize(36);
-    fill('#333');
-    text("YOU MADE IT!", playAreaX + playAreaWidth/2, playAreaY + playAreaHeight * 0.15);
-    
-    // Draw recipe name
-    textSize(32);
-    fill(COLORS.secondary);
-    text(final_combination.name, playAreaX + playAreaWidth/2, playAreaY + playAreaHeight * 0.25);
-    
-    // Draw turn count with larger, more prominent display
-    textSize(24);
-    fill('#666');
-    text("Completed in", playAreaX + playAreaWidth/2, playAreaY + playAreaHeight * 0.35);
-    
-    // Draw turn counter in a circle
-    let turnCircleSize = 70;
-    fill(COLORS.primary);
-    noStroke();
-    circle(playAreaX + playAreaWidth/2, playAreaY + playAreaHeight * 0.45, turnCircleSize);
-    
-    // Draw turn number
-    fill('white');
-    textSize(32);
-    text(turnCounter, playAreaX + playAreaWidth/2, playAreaY + playAreaHeight * 0.45);
-    textSize(16);
-    text("turns", playAreaX + playAreaWidth/2, playAreaY + playAreaHeight * 0.45 + 25);
-    
-    // Draw move history with larger circles
-    drawWinMoveHistory();
-    
-    // Position buttons at the bottom of the play area with proper spacing
-    const buttonSpacing = 20;
-    const buttonY = playAreaY + playAreaHeight * 0.9;
-    
-    // Update button positions
-    shareButton.x = playAreaX + playAreaWidth/2 - shareButton.w - buttonSpacing/2;
-    shareButton.y = buttonY;
-    recipeButton.x = playAreaX + playAreaWidth/2 + buttonSpacing/2;
-    recipeButton.y = buttonY;
-    
-    // Draw buttons
-    shareButton.draw();
-    recipeButton.draw();
-    
-    // Check button hover
-    shareButton.checkHover(mouseX, mouseY);
-    recipeButton.checkHover(mouseX, mouseY);
-  }
-  
-  // Enhanced move history display for win screen
-  function drawWinMoveHistory() {
-    textAlign(CENTER);
-    textSize(16);
-    fill('black');
-    text(`You solved it in ${moveHistory.length} moves!`, 
-         playAreaX + playAreaWidth/2, 
-         playAreaY + playAreaHeight * 0.55);
-    
-    const circleSize = 20; // Slightly smaller circles
-    const margin = 8;
-    const maxPerRow = Math.min(10, Math.floor(playAreaWidth / (circleSize + margin))); // Limit based on play area width
-    const rowWidth = Math.min(moveHistory.length, maxPerRow) * (circleSize + margin) - margin;
-    const startX = playAreaX + playAreaWidth/2 - rowWidth / 2;
-    const startY = playAreaY + playAreaHeight * 0.6;
-    
-    // Calculate how many rows we need
-    const numRows = Math.ceil(moveHistory.length / maxPerRow);
-    
-    // Ensure we don't overlap with buttons
-    if (startY + numRows * (circleSize + margin) > playAreaY + playAreaHeight * 0.85) {
-      // If we would overlap, reduce the circle size
-      const reducedCircleSize = 15;
-      const reducedMargin = 6;
-      
-      // Recalculate with smaller circles
-      const reducedMaxPerRow = Math.min(12, Math.floor(playAreaWidth / (reducedCircleSize + reducedMargin)));
-      const reducedRowWidth = Math.min(moveHistory.length, reducedMaxPerRow) * (reducedCircleSize + reducedMargin) - reducedMargin;
-      const reducedStartX = playAreaX + playAreaWidth/2 - reducedRowWidth / 2;
-      
-      // Draw smaller circles
-      for (let i = 0; i < moveHistory.length; i++) {
-        const row = Math.floor(i / reducedMaxPerRow);
-        const col = i % reducedMaxPerRow;
-        const x = reducedStartX + col * (reducedCircleSize + reducedMargin);
-        const y = startY + row * (reducedCircleSize + reducedMargin);
-        
-        // Use the exact same colors as the vessels
-        let circleColor;
-        if (moveHistory[i] === 'white') {
-          circleColor = COLORS.vesselBase; // Use vesselBase instead of white
-        } else if (moveHistory[i] === 'yellow') {
-          circleColor = COLORS.tertiary; // Use tertiary (mustard yellow) instead of yellow
-        } else if (moveHistory[i] === 'green') {
-          circleColor = COLORS.primary; // Use primary (avocado green) instead of green
-        } else if (moveHistory[i] === 'black') {
-          circleColor = COLORS.text; // Use text color instead of black
-        } else {
-          circleColor = moveHistory[i]; // Use the original color if it's not one of the above
-        }
-        
-        fill(circleColor);
-        noStroke();
-        circle(x, y, reducedCircleSize);
-      }
-    } else {
-      // Draw regular sized circles
-      for (let i = 0; i < moveHistory.length; i++) {
-        const row = Math.floor(i / maxPerRow);
-        const col = i % maxPerRow;
-        const x = startX + col * (circleSize + margin);
-        const y = startY + row * (circleSize + margin);
-        
-        // Use the exact same colors as the vessels
-        let circleColor;
-        if (moveHistory[i] === 'white') {
-          circleColor = COLORS.vesselBase; // Use vesselBase instead of white
-        } else if (moveHistory[i] === 'yellow') {
-          circleColor = COLORS.tertiary; // Use tertiary (mustard yellow) instead of yellow
-        } else if (moveHistory[i] === 'green') {
-          circleColor = COLORS.primary; // Use primary (avocado green) instead of green
-        } else if (moveHistory[i] === 'black') {
-          circleColor = COLORS.text; // Use text color instead of black
-        } else {
-          circleColor = moveHistory[i]; // Use the original color if it's not one of the above
-        }
-        
-        fill(circleColor);
-        noStroke();
-        circle(x, y, circleSize);
-      }
-    }
-  }
-  
-  // Keep the regular move history for during gameplay
-  function drawMoveHistory() {
-    if (moveHistory.length === 0) return;
-    
-    // Position the move history as a footer at the very bottom of the play area
-    const circleSize = 15;
-    const margin = 8;
-    const maxPerRow = 10; // Reduced from 15 to allow more rows
-    const rowWidth = Math.min(moveHistory.length, maxPerRow) * (circleSize + margin) - margin;
-    
-    // Center horizontally within the play area
-    const startX = playAreaX + (playAreaWidth / 2) - (rowWidth / 2);
-    
-    // Position the move history at the very bottom of the play area (footer)
-    // Leave just enough space for the circles and a small margin
-    const moveHistoryY = playAreaY + playAreaHeight - (Math.ceil(moveHistory.length / maxPerRow) * (circleSize + margin)) - 10;
-    
-    // Calculate how many rows we need
-    const numRows = Math.ceil(moveHistory.length / maxPerRow);
-    const totalHeight = numRows * (circleSize + margin) - margin;
-    
-    // Ensure we're within the play area
-    if (moveHistoryY < playAreaY) return;
-    
-    for (let i = 0; i < moveHistory.length; i++) {
-      const row = Math.floor(i / maxPerRow);
-      const col = i % maxPerRow;
-      
-      const x = startX + col * (circleSize + margin);
-      const y = moveHistoryY + row * (circleSize + margin);
-      
-      // Use the exact same colors as the vessels
-      let circleColor;
-      if (moveHistory[i] === 'white') {
-        circleColor = COLORS.vesselBase; // Use vesselBase instead of white
-      } else if (moveHistory[i] === 'yellow') {
-        circleColor = COLORS.tertiary; // Use tertiary (mustard yellow) instead of yellow
-      } else if (moveHistory[i] === 'green') {
-        circleColor = COLORS.primary; // Use primary (avocado green) instead of green
-      } else if (moveHistory[i] === 'black') {
-        circleColor = COLORS.text; // Use text color instead of black
-      } else {
-        circleColor = moveHistory[i]; // Use the original color if it's not one of the above
-      }
-      
-      fill(circleColor);
-      noStroke();
-      circle(x, y, circleSize);
-    }
-  }
-  
-  function updateCursor() {
-    let overInteractive = false;
-    
-    if (!gameStarted) {
-      // Check start button
-      if (startButton.isInside(mouseX, mouseY)) {
-        overInteractive = true;
-      }
-    } else if (gameWon) {
-      // Check buttons
-      if (shareButton.isInside(mouseX, mouseY) || recipeButton.isInside(mouseX, mouseY)) {
-        overInteractive = true;
-      }
-    } else {
-      // Check vessels
-      for (let v of vessels) {
-        if (v.isInside(mouseX, mouseY)) {
-          overInteractive = true;
-          break;
-        }
-      }
-      
-      // Check hint vessel
-      if (showingHint && hintVessel && hintVessel.isInside(mouseX, mouseY)) {
-        overInteractive = true;
-      }
-      
-      // Check buttons
-      if (!showingHint && hintButton.isInside(mouseX, mouseY)) {
-        overInteractive = true;
-      }
-    }
-    
-    // Set cursor
-    cursor(overInteractive ? HAND : ARROW);
-  }
-  
-  function mousePressed() {
-    if (!gameStarted) {
-      // Check if start button was clicked
-      if (startButton.isInside(mouseX, mouseY)) {
-        startButton.handleClick();
-        return;
-      }
-    } else if (gameWon) {
-      // Check if buttons were clicked
-      if (shareButton.handleClick() || recipeButton.handleClick()) {
-        return;
-      }
-    } else {
-      // Check if hint button was clicked
-      if (!showingHint && hintButton.isInside(mouseX, mouseY)) {
-        hintButton.handleClick();
-        return;
-      }
-      
-      // Check if a vessel was clicked
-      for (let v of vessels) {
-        if (v.isInside(mouseX, mouseY)) {
-          draggedVessel = v;
-          offsetX = mouseX - v.x;
-          offsetY = mouseY - v.y;
-          v.targetScale = 1.1; // Slight scale up when dragging
-          triggerHapticFeedback('success'); // Haptic feedback on successful drag
-          break;
-        }
-      }
-    }
-  }
-  
-  function mouseDragged() {
-    if (draggedVessel) {
-      draggedVessel.x = mouseX - offsetX;
-      draggedVessel.y = mouseY - offsetY;
-    }
-  }
-  
-  function mouseReleased() {
-    if (draggedVessel) {
-      draggedVessel.targetScale = 1; // Reset scale
-      
-      let overVessel = null;
-      let overVesselIndex = -1;
-      let overHintVessel = false;
-      
-      // Check if dragged over another vessel
-      for (let i = 0; i < vessels.length; i++) {
-        let v = vessels[i];
-        if (v !== draggedVessel && v.isInside(mouseX, mouseY)) {
-          overVessel = v;
-          overVesselIndex = i;
-          break;
-        }
-      }
-      
-      // Check if dragged over hint vessel
-      if (showingHint && hintVessel && hintVessel.isInside(mouseX, mouseY)) {
-        overHintVessel = true;
-      }
-      
-      if (overVessel) {
-        // Regular vessel combination
-        // Increment turn counter
-        turnCounter++;
-        
-        let new_v = combineVessels(draggedVessel, overVessel);
-        if (new_v) {
-          // Create animation particles
-          createCombineAnimation(draggedVessel.x, draggedVessel.y, draggedVessel.color, new_v.x, new_v.y);
-          createCombineAnimation(overVessel.x, overVessel.y, overVessel.color, new_v.x, new_v.y);
-          
-          // Get the index of the dragged vessel
-          let draggedIndex = vessels.indexOf(draggedVessel);
-          
-          // Remove old vessels
-          vessels = vessels.filter(v => v !== draggedVessel && v !== overVessel);
-          
-          // Insert the new vessel at the position of the target vessel
-          // This ensures the new vessel appears close to where the user dropped it
-          vessels.splice(overVesselIndex, 0, new_v);
-          
-          // Re-arrange vessels with the new vessel in place
-          arrangeVessels();
-          
-          // Pulse the new vessel
-          new_v.pulse();
-          
-          // Store the current move history length to detect if checkForMatchingVessels adds moves
-          let originalMoveHistoryLength = moveHistory.length;
-          
-          // Check if the new vessel matches the current hint
-          if (showingHint && hintVessel) {
-            // Check if this vessel matches the hint
-            checkForMatchingVessels();
-          }
-          
-          // Only add to move history if it wasn't already added by checkForMatchingVessels
-          if (moveHistory.length === originalMoveHistoryLength) {
-            // Add successful move to history with the color of the new vessel
-            moveHistory.push(new_v.color);
-          }
-          
-          // Check if the game is won
-          if (vessels.length === 1 && vessels[0].name === final_combination.name) {
-            gameWon = true;
-            triggerHapticFeedback('completion'); // Haptic feedback on game completion
-          } else {
-            // Trigger haptic feedback for successful combination
-            triggerHapticFeedback('medium');
-          }
-        } else {
-          // Combination failed, snap back
-          draggedVessel.snapBack();
-          // Add unsuccessful move to history (black)
-          moveHistory.push('black');
-          triggerHapticFeedback('error'); // Haptic feedback on unsuccessful move
-        }
-      } else if (overHintVessel) {
-        // Trying to add to the hint vessel
-        turnCounter++;
-        
-        let canAddToHint = false;
-        
-        // Check if it's a single ingredient
-        if (draggedVessel.ingredients.length === 1) {
-          let ingredientName = draggedVessel.ingredients[0];
-          canAddToHint = hintVessel.addIngredient(ingredientName);
-        } 
-        // Check if it's a partial combination that matches one of the required ingredients
-        else if (draggedVessel.name && hintVessel.required.includes(draggedVessel.name)) {
-          canAddToHint = hintVessel.addIngredient(draggedVessel.name);
-        }
-        // Check if it's a yellow vessel with multiple ingredients that are all part of the hint
-        else if (draggedVessel.ingredients.length > 0 && draggedVessel.ingredients.every(ing => hintVessel.required.includes(ing))) {
-          // Check if we can add all ingredients to the hint
-          canAddToHint = true;
-          for (let ing of draggedVessel.ingredients) {
-            if (hintVessel.collected.includes(ing)) {
-              canAddToHint = false;
-              break;
-            }
-          }
-          
-          // If we can add all ingredients, do so
-          if (canAddToHint) {
-            for (let ing of draggedVessel.ingredients) {
-              hintVessel.addIngredient(ing);
-            }
-          }
-        }
-        
-        if (canAddToHint) {
-          // Create animation
-          createCombineAnimation(draggedVessel.x, draggedVessel.y, draggedVessel.color, hintVessel.x, hintVessel.y);
-          
-          // Remove the vessel
-          vessels = vessels.filter(v => v !== draggedVessel);
-          arrangeVessels();
-          
-          // Add red move to history (not the original vessel color)
-          moveHistory.push('#FF5252');
-          
-          // Check if hint is complete
-          if (hintVessel.isComplete()) {
-            // Convert hint to regular vessel
-            let newVessel = hintVessel.toVessel();
-            vessels.push(newVessel);
-            arrangeVessels();
-            
-            // Reset hint
-            hintVessel = null;
-            showingHint = false;
-            
-            // Check win condition
-            if (vessels.length === 1 && vessels[0].name === final_combination.name) {
-              gameWon = true;
-              triggerHapticFeedback('completion'); // Haptic feedback on game completion
-            }
-          }
-        } else {
-          draggedVessel.snapBack();
-          // Add unsuccessful move to history (black)
-          moveHistory.push('black');
-          triggerHapticFeedback('error'); // Haptic feedback on unsuccessful move
-        }
-      } else {
-        draggedVessel.snapBack();
-      }
-      
-      draggedVessel = null;
-    }
-  }
-  
-  function createCombineAnimation(startX, startY, color, targetX, targetY) {
-    for (let i = 0; i < 5; i++) {
-      animations.push(new CombineAnimation(startX, startY, color, targetX, targetY));
-    }
-  }
-  
-  function combineVessels(v1, v2) {
-    // Check if hint is active before creating any new vessels
-    let hintActive = showingHint && hintVessel;
-    
-    // Log the vessels being combined for debugging
-    console.log(`Combining vessels: 
-      Vessel 1: ${v1.name || 'unnamed'} (${v1.color}), 
-      ingredients: [${v1.ingredients.join(', ')}], 
-      combinations: [${v1.complete_combinations.join(', ')}]
-      Vessel 2: ${v2.name || 'unnamed'} (${v2.color}), 
-      ingredients: [${v2.ingredients.join(', ')}], 
-      combinations: [${v2.complete_combinations.join(', ')}]`);
-    
-    // Case 1: Both vessels are base ingredients (white vessels)
-    if (v1.ingredients.length > 0 && v2.ingredients.length > 0 && v1.complete_combinations.length === 0 && v2.complete_combinations.length === 0) {
-      let U = [...new Set([...v1.ingredients, ...v2.ingredients])];
-      
-      // Special handling for hint: If all ingredients are part of the hint, create a yellow vessel
-      // This will be detected by checkForMatchingVessels and added to the hint vessel
-      if (hintActive) {
-        // Check if all ingredients are required for the hint
-        let allIngredientsInHint = U.every(ing => hintVessel.required.includes(ing));
-        
-        // Check if any of these ingredients are already collected in the hint
-        let anyAlreadyCollected = U.some(ing => hintVessel.collected.includes(ing));
-        
-        // If all ingredients are part of the hint and none are already collected,
-        // create a yellow vessel that will be detected by checkForMatchingVessels
-        if (allIngredientsInHint && !anyAlreadyCollected) {
-          console.log(`Creating yellow vessel for hint with ingredients: ${U.join(', ')}`);
-          let new_v = new Vessel(U, [], null, 'yellow', (v1.x + v2.x) / 2, (v1.y + v2.y) / 2, 200, 100);
-          return new_v;
-        }
-      }
-      
-      // Check if this combination matches or partially matches any recipe
-      let C_candidates = intermediate_combinations.filter(C => {
-        // Check if there's any overlap between the required ingredients and our combined set
-        let overlap = C.required.filter(ing => U.includes(ing));
-        // Only consider it a match if ALL ingredients in U are part of the recipe
-        // AND there's at least one ingredient from the recipe in U
-        return overlap.length > 0 && U.every(ing => C.required.includes(ing));
-      });
-      
-      // Only create a new vessel if we have valid recipe candidates
-      if (C_candidates.length > 0) {
-        // Create a new vessel (yellow or green)
-        let new_v = new Vessel(U, [], null, 'yellow', (v1.x + v2.x) / 2, (v1.y + v2.y) / 2, 200, 100);
-        
-        let C = C_candidates[0];
-        
-        // Check if we have all required ingredients for this combination
-        // Only turn green if we have exactly the required ingredients (no extras)
-        if (U.length === C.required.length && C.required.every(ing => U.includes(ing))) {
-          // Only turn green if not part of an active hint
-          if (!hintActive || C.name !== hintVessel.name) {
-            new_v.name = C.name;
-            new_v.color = 'green';
-            new_v.ingredients = []; // Clear ingredients since this is now a complete combination
-            console.log(`Created green vessel for ${C.name} with ingredients: ${U.join(', ')}`);
-          }
-        } else {
-          console.log(`Created yellow vessel with ingredients: ${U.join(', ')}`);
-          console.log(`Missing ingredients for ${C.name}: ${C.required.filter(ing => !U.includes(ing)).join(', ')}`);
-        }
-        
-        return new_v;
-      } else {
-        // No matching recipe, don't create a vessel
-        console.log(`Cannot combine unrelated ingredients: ${U.join(', ')}`);
-        return null;
-      }
-    } 
-    // Case 2: Both vessels are completed combinations (green vessels)
-    else if ((v1.name || v1.complete_combinations.length > 0) && (v2.name || v2.complete_combinations.length > 0)) {
-      // Handle combining completed combinations (green vessels)
-      let set1 = v1.complete_combinations.length > 0 ? v1.complete_combinations : (v1.name ? [v1.name] : []);
-      let set2 = v2.complete_combinations.length > 0 ? v2.complete_combinations : (v2.name ? [v2.name] : []);
-      let U = [...new Set([...set1, ...set2])];
-      
-      console.log(`Combining completed combinations: ${U.join(', ')}`);
-      console.log(`Final combination requires: ${final_combination.required.join(', ')}`);
-      
-      // Check if the combined set contains valid components for the final combination
-      let validComponents = U.filter(name => final_combination.required.includes(name));
-      console.log(`Valid components found: ${validComponents.join(', ')}`);
-      
-      if (validComponents.length > 0) {
-        let new_v = new Vessel([], U, null, 'yellow', (v1.x + v2.x) / 2, (v1.y + v2.y) / 2, 200, 100);
-        
-        // Check if we have all required components for the final combination
-        let hasAllComponents = final_combination.required.every(name => U.includes(name));
-        console.log(`Has all components for final recipe: ${hasAllComponents}`);
-        
-        if (hasAllComponents) {
-          new_v.name = final_combination.name;
-          new_v.color = 'green';
-          new_v.complete_combinations = []; // Clear since this is the final combination
-          console.log(`Created green vessel for final combination ${final_combination.name}`);
-        } else {
-          console.log(`Created yellow vessel with combinations: ${U.join(', ')}`);
-          console.log(`Missing combinations for ${final_combination.name}: ${final_combination.required.filter(name => !U.includes(name)).join(', ')}`);
-        }
-        return new_v;
-      }
-    }
-    // Case 3: Mixing a base ingredient (white vessel) with a completed combination (green/yellow vessel)
-    else if ((v1.ingredients.length > 0 && (v2.name || v2.complete_combinations.length > 0)) || 
-             (v2.ingredients.length > 0 && (v1.name || v1.complete_combinations.length > 0))) {
-      
-      // Determine which vessel is the base ingredient and which is the combination
-      let baseVessel = v1.ingredients.length > 0 ? v1 : v2;
-      let comboVessel = v1.ingredients.length > 0 ? v2 : v1;
-      
-      // Get the base ingredient name(s)
-      let baseIngredients = baseVessel.ingredients;
-      
-      // Get the completed combinations
-      let completedCombos = comboVessel.complete_combinations.length > 0 ? 
-                            comboVessel.complete_combinations : 
-                            (comboVessel.name ? [comboVessel.name] : []);
-      
-      console.log(`Mixing base ingredients [${baseIngredients.join(', ')}] with combinations [${completedCombos.join(', ')}]`);
-      
-      // Check if any base ingredient is directly required in the final combination
-      let baseInFinal = baseIngredients.some(ing => final_combination.required.includes(ing));
-      
-      // Check if any completed combo is required in the final combination
-      let comboInFinal = completedCombos.some(combo => final_combination.required.includes(combo));
-      
-      console.log(`Base in final: ${baseInFinal}, Combo in final: ${comboInFinal}`);
-      
-      // If either the base ingredient or the combo is part of the final recipe, proceed
-      if (baseInFinal || comboInFinal) {
-        // Create a combined set of all components (both base ingredients and completed combos)
-        let allComponents = [...baseIngredients, ...completedCombos];
-        
-        // Create a yellow vessel for the partial combination
-        let new_v = new Vessel([], allComponents, null, 'yellow', (v1.x + v2.x) / 2, (v1.y + v2.y) / 2, 200, 100);
-        
-        // Check if we have all required components for the final combination
-        let hasAllComponents = final_combination.required.every(name => allComponents.includes(name));
-        console.log(`Has all components for final recipe: ${hasAllComponents}`);
-        
-        if (hasAllComponents) {
-          new_v.name = final_combination.name;
-          new_v.color = 'green';
-          console.log(`Created green vessel for final combination ${final_combination.name}`);
-        } else {
-          console.log(`Created yellow vessel with mixed components: ${allComponents.join(', ')}`);
-          console.log(`Missing components for ${final_combination.name}: ${final_combination.required.filter(name => !allComponents.includes(name)).join(', ')}`);
-        }
-        
-        return new_v;
-      }
-    }
-    
-    // If we reach here, the combination is not valid
-    console.log("Invalid combination, no vessel created");
-    return null;
-  }
-  
-  function shareScore() {
-    // Create share text
-    let shareText = `I made ${final_combination.name} in ${turnCounter} turns in Combo Meal! Can you beat my score?`;
-    
-    // Try to use the Web Share API if available
-    if (navigator.share) {
-      navigator.share({
-        title: 'Combo Meal Score',
-        text: shareText,
-        url: window.location.href
-      })
-      .catch(error => console.log('Error sharing:', error));
-    } else {
-      // Fallback: copy to clipboard
-      navigator.clipboard.writeText(shareText)
-        .then(() => {
-          alert('Score copied to clipboard!');
-        })
-        .catch(err => {
-          console.error('Failed to copy: ', err);
-          alert(shareText);
-        });
-    }
-  }
-  
-  function viewRecipe() {
-    window.open(recipeUrl, '_blank');
-  }
-  
-  function mouseMoved() {
-    // Check if buttons exist before trying to use them
-    if (!gameStarted && startButton) {
-      startButton.checkHover(mouseX, mouseY);
-    }
-    
-    if (gameStarted) {
-      // Only check these buttons if they exist and the game has started
-      if (shareButton) shareButton.checkHover(mouseX, mouseY);
-      if (recipeButton) recipeButton.checkHover(mouseX, mouseY);
-      if (hintButton) hintButton.checkHover(mouseX, mouseY);
-    }
-  }
-  
-  // Function to show a hint
-  function showHint() {
-    if (!showingHint && !gameWon) {
-      // Find combinations that haven't been completed yet
-      let completedCombos = vessels
-        .filter(v => v.name !== null)
-        .map(v => v.name);
-      
-      // Find partial combinations that exist in vessels
-      let partialCombos = [];
-      for (let v of vessels) {
-        if (v.ingredients.length > 0 && v.name === null) {
-          // This is a partial combination (yellow vessel without a name)
-          for (let combo of intermediate_combinations) {
-            // Check if this partial combination is working toward a specific combo
-            if (v.ingredients.every(ing => combo.required.includes(ing))) {
-              partialCombos.push(combo.name);
-            }
-          }
-        }
-      }
-      
-      // First check intermediate combinations that aren't partial or completed
-      let availableCombos = intermediate_combinations.filter(combo => 
-        !completedCombos.includes(combo.name) && !partialCombos.includes(combo.name));
-      
-      // If no non-partial combos are available, then allow partial combos
-      if (availableCombos.length === 0) {
-        availableCombos = intermediate_combinations.filter(combo => 
-          !completedCombos.includes(combo.name));
-      }
-      
-      // If all intermediate combinations are done, check final combination
-      if (availableCombos.length === 0 && !completedCombos.includes(final_combination.name)) {
-        availableCombos = [final_combination];
-      }
-      
-      // If there are available combinations, show a hint
-      if (availableCombos.length > 0) {
-        // Choose a random combination to hint
-        let combo = availableCombos[Math.floor(Math.random() * availableCombos.length)];
-        hintVessel = new HintVessel(combo);
-        showingHint = true;
-        
-        // Check if any existing yellow vessels match ingredients needed for this hint
-        checkForMatchingVessels();
-      }
-    }
-  }
-  
-  // Function to check if any yellow vessels match the current hint
-  function checkForMatchingVessels() {
-    if (!hintVessel) return;
-    
-    // Look for yellow vessels that match required ingredients for the hint
-    for (let i = vessels.length - 1; i >= 0; i--) {
-      let v = vessels[i];
-      
-      // Check if it's a yellow vessel with ingredients that match the hint
-      if (v.color === 'yellow' && v.ingredients.length > 0) {
-        let matchesHint = false;
-        
-        // Check if all ingredients in this vessel are required for the hint
-        if (v.ingredients.every(ing => hintVessel.required.includes(ing))) {
-          // Check if we can add all ingredients to the hint
-          let canAddAll = true;
-          for (let ing of v.ingredients) {
-            if (hintVessel.collected.includes(ing)) {
-              canAddAll = false;
-              break;
-            }
-          }
-          
-          if (canAddAll) {
-            matchesHint = true;
-            console.log("Adding ingredients to hint: " + v.ingredients.join(', '));
-            
-            // Add all ingredients to the hint vessel
-            for (let ing of v.ingredients) {
-              hintVessel.addIngredient(ing);
-            }
-            
-            // Create animation
-            createCombineAnimation(v.x, v.y, v.color, hintVessel.x, hintVessel.y);
-            
-            // Remove the vessel
-            vessels.splice(i, 1);
-            
-            // Add red moves to history - one for each ingredient (or at least two if it was a combination)
-            // This ensures we count the proper number of turns when adding multiple ingredients at once
-            let numIngredientsAdded = Math.max(2, v.ingredients.length);
-            for (let j = 0; j < numIngredientsAdded; j++) {
-              moveHistory.push('#FF5252');
-            }
-            
-            // Increment turn counter - add one more turn since the first turn was already counted
-            // when the vessel was created in mouseReleased
-            turnCounter += (numIngredientsAdded - 1);
-          }
-        }
-      }
-    }
-    
-    // Re-arrange vessels after potential removals
-    arrangeVessels();
-    
-    // Check if hint is complete
-    if (hintVessel && hintVessel.isComplete()) {
-      // Convert hint to regular vessel
-      let newVessel = hintVessel.toVessel();
-      vessels.push(newVessel);
-      arrangeVessels();
-      
-      // Reset hint
-      hintVessel = null;
-      showingHint = false;
-    }
-  }
+  // function createCombineAnimation(startX, startY, color, targetX, targetY) { ... }
+  // This is defined in animation.js
   
   function startGame() {
+    // Ensure all necessary initialization has happened before starting game
+    if (vessels.length === 0 || isLoadingRecipe) {
+      console.log("Cannot start game yet - initialization incomplete");
+      return;
+    }
+    
+    // Start cook transition if wallpaper animation exists
+    if (wallpaperAnimation) {
+      console.log("🍳 Starting cook transition with wallpaper animation");
+      wallpaperAnimationActive = true;
+      wallpaperAnimation.startCookTransition();
+      return; // Don't start game immediately, wait for animation
+    }
+    
+    // Fallback: start game immediately if no wallpaper animation
+    console.log("🍳 Starting game immediately (no wallpaper animation)");
+    actuallyStartGame();
+  }
+  
+  function actuallyStartGame() {
+    console.log("🎮 Actually starting the game now!");
+    
+    // Reset loading state for new game - APlasker
+    loadingComplete = false;
     gameStarted = true;
+    
+    // Capture current streak at start of session - APlasker
+    if (typeof StreakSystem !== 'undefined') {
+      const streakInfo = StreakSystem.getStreakInfo();
+      sessionStartStreak = streakInfo.currentStreak || 0;
+      console.log('Session started with streak:', sessionStartStreak);
+    }
+    
+    // Initialize timer
+    startTime = Date.now();
+    gameTimer = 0;
+    gameTimerActive = true;
+    
+    // APlasker - Start analytics session tracking with improved error handling
+    if (typeof startGameSession === 'function') {
+      // Get recipe ID with multiple fallbacks
+      let recipeId = null;
+      
+      if (recipe_data && recipe_data.rec_id) {
+        recipeId = recipe_data.rec_id;
+      } else if (final_combination && final_combination.rec_id) {
+        recipeId = final_combination.rec_id;
+      } else if (recipe && recipe.rec_id) {
+        recipeId = recipe.rec_id;
+      }
+      
+      if (recipeId && recipeId !== null && recipeId !== undefined) {
+        console.log("🚀 Starting analytics session for recipe:", recipeId);
+        
+        // MAGIC LINK FIX: Enhanced logging for magic link users
+        if (window.authState?.isAuthenticated && !window.authState?.isAnonymous) {
+          console.log("🔗 Magic link user starting game session");
+          console.log("Auth state:", {
+            isAuthenticated: window.authState.isAuthenticated,
+            isAnonymous: window.authState.isAnonymous,
+            userEmail: window.authState.user?.email
+          });
+        }
+        
+        startGameSession(recipeId).then(sessionId => {
+          if (sessionId) {
+            console.log("✅ Analytics session started successfully:", sessionId);
+            
+            // MAGIC LINK FIX: Confirm session creation for magic link users
+            if (window.authState?.isAuthenticated && !window.authState?.isAnonymous) {
+              console.log("🔗 Magic link user session confirmed - tracking should now work");
+            }
+          } else {
+            console.warn("⚠️ Analytics session creation returned null - check Supabase");
+          }
+        }).catch(error => {
+          console.error("❌ Analytics session creation failed:", error);
+        });
+      } else {
+        console.warn("⚠️ No valid recipe ID found for analytics - session not created");
+      }
+    } else {
+      console.warn("⚠️ startGameSession function not available");
+    }
+    
+    // Trigger help button animation from rectangular to circular
+    helpButtonAnimating = true;
+    helpButtonAnimationProgress = 0;
+    
+    // Initialize lastAction to current frame count when game starts - APlasker
+    lastAction = frameCount;
+    
+    // Reset inactivity reminder count when game starts
+    inactivityReminderCount = 0;
+    
+    // Reset partial combo message tracking - APlasker
+    firstPartialComboCreated = false;
+    usedPartialComboMessages = [];
+    
+    // Reset error message tracking - APlasker
+    firstErrorOccurred = false;
+    usedErrorMessages = [];
+    
+    // Reset byline to default - APlasker
+    currentByline = "Drop one ingredient on to another to combine!"; // Updated default byline - APlasker
+    nextByline = "";
+    bylineTimer = 0;
+    bylineTransitionState = "stable";
+    bylineOpacity = 255;
+    isTransitioning = false;
+    
+    // Force a re-arrangement of vessels to ensure proper positioning
+    console.log("Ensuring vessels are properly arranged");
+    arrangeVessels();
+  }
+  
+  // Function to start tutorial mode - APlasker
+  function startTutorial() {
+    console.log("Starting tutorial mode with recipe from date:", tutorialRecipeDate);
+    
+    // Set tutorial mode flag
+    isTutorialMode = true;
+    
+    // Reset loading state for tutorial - APlasker
+    loadingComplete = false;
+    
+    // Reset game state
+    gameWon = false;
+    turnCounter = 0;
+    moveHistory = [];
+    animations = [];
+    vessels = [];
+    
+    // Reset tutorial-specific variables
+    tutorialErrorCount = 0;
+    
+    // Reset all tutorial message flags - APlasker
+    tutorialMessagesShown = {
+      startShown: false,
+      inactivityShown: false,
+      firstErrorShown: false,
+      subsequentErrorsShown: false,
+      firstSuccessShown: false,
+      firstComboCompletedShown: false
+    };
+    
+    // Clear any existing recipe data
+    intermediate_combinations = [];
+    final_combination = {};
+    ingredients = [];
+    
+    // Set loading state
+    isLoadingRecipe = true;
+    
+    // Load the tutorial recipe
+    loadTutorialRecipe().then(() => {
+      // Once recipe is loaded, start the game
+      gameStarted = true;
+      
+      // Capture current streak at start of tutorial session - APlasker
+      if (typeof StreakSystem !== 'undefined') {
+        const streakInfo = StreakSystem.getStreakInfo();
+        sessionStartStreak = streakInfo.currentStreak || 0;
+        console.log('Tutorial session started with streak:', sessionStartStreak);
+      }
+      
+      // Initialize timer for tutorial mode - APlasker
+      startTime = Date.now();
+      gameTimer = 0;
+      gameTimerActive = true;
+      
+      // APlasker - Start analytics session tracking for tutorial with improved error handling
+      if (typeof startGameSession === 'function') {
+        // Get recipe ID with multiple fallbacks
+        let recipeId = null;
+        
+        if (recipe_data && recipe_data.rec_id) {
+          recipeId = recipe_data.rec_id;
+        } else if (final_combination && final_combination.rec_id) {
+          recipeId = final_combination.rec_id;
+        } else if (recipe && recipe.rec_id) {
+          recipeId = recipe.rec_id;
+        }
+        
+        console.log("Tutorial Recipe ID for analytics:", recipeId);
+        console.log("Available tutorial recipe data:", {
+          recipe_data: recipe_data,
+          final_combination: final_combination,
+          recipe: typeof recipe !== 'undefined' ? recipe : 'undefined'
+        });
+        
+        if (recipeId && recipeId !== null && recipeId !== undefined) {
+          console.log("Starting analytics session for tutorial recipe:", recipeId);
+          startGameSession(recipeId).then(sessionId => {
+            if (sessionId) {
+              console.log("✅ Tutorial analytics session started successfully:", sessionId);
+            } else {
+              console.warn("⚠️ Tutorial analytics session creation returned null - check Supabase");
+            }
+          }).catch(error => {
+            console.error("❌ Tutorial analytics session creation failed:", error);
+          });
+        } else {
+          console.warn("⚠️ No valid recipe ID found for tutorial analytics - session not created");
+          console.log("tutorial recipe_data:", recipe_data);
+        }
+      } else {
+        console.warn("⚠️ startGameSession function not available for tutorial");
+      }
+      
+      // Trigger help button animation from rectangular to circular
+      helpButtonAnimating = true;
+      helpButtonAnimationProgress = 0;
+      
+      // Initialize lastAction to current frame count
+      lastAction = frameCount;
+      
+      // Reset message tracking
+      firstPartialComboCreated = false;
+      usedPartialComboMessages = [];
+      firstErrorOccurred = false;
+      usedErrorMessages = [];
+      
+      // Set tutorial-specific byline
+      currentByline = tutorialBylines.start;
+      tutorialMessagesShown.startShown = true; // Mark start message as shown
+      nextByline = "";
+      bylineTimer = 0;
+      bylineTransitionState = "stable";
+      bylineOpacity = 255;
+      isTransitioning = false;
+      
+      // Arrange vessels for tutorial
+      console.log("Arranging vessels for tutorial");
+      arrangeVessels();
+      
+      // Automatically show help modal after a short delay to ensure everything is loaded
+      setTimeout(() => {
+        console.log("Automatically showing help modal for tutorial");
+        if (typeof showHelpModal === 'function') {
+          showHelpModal();
+        }
+      }, 500); // 500ms delay to ensure the game is fully initialized
+    }).catch(error => {
+      console.error("Error loading tutorial recipe:", error);
+      isLoadingRecipe = false;
+      loadingError = true;
+    });
+  }
+  
+  // Function to load the tutorial recipe - APlasker
+  async function loadTutorialRecipe() {
+    try {
+      console.log("Loading tutorial recipe from date:", tutorialRecipeDate);
+      
+      // Use the existing fetchRecipeByDate function with our tutorial date
+      const recipeData = await fetchRecipeByDate(tutorialRecipeDate);
+      
+      if (!recipeData) {
+        console.error("No tutorial recipe data found");
+        throw new Error("Tutorial recipe not found");
+      }
+      
+      console.log("Tutorial recipe data loaded successfully");
+      
+      // Store recipe data in the global variable
+      recipe_data = recipeData;
+      
+      // Store the recipe object globally for stats access
+      recipe = recipeData;
+      
+      // Update game variables with recipe data
+      intermediate_combinations = recipeData.intermediateCombinations;
+      final_combination = recipeData.finalCombination;
+      easter_eggs = recipeData.easterEggs;
+      ingredients = recipeData.baseIngredients;
+      base_ingredients = recipeData.baseIngredients;
+      recipeUrl = recipeData.recipeUrl;
+      recipeDescription = recipeData.description || "A tutorial recipe to help you learn the game!";
+      recipeAuthor = recipeData.author || "Tutorial";
+      
+      // Initialize game with the tutorial recipe
+      initializeGame();
+      
+      // Set loading state to false
+      isLoadingRecipe = false;
+      recipeDataLoadedForStats = true;
+      
+      // MODIFIED BY APLASKER: Load the image in the background AFTER game is initialized
+      if (recipeData.imgUrl) {
+        console.log("Loading tutorial recipe image in background from URL:", recipeData.imgUrl);
+        isLoadingImage = true;
+        
+        // Use loadImage with success and error callbacks
+        loadImage(
+          recipeData.imgUrl,
+          // Success callback
+          (img) => {
+            console.log("Tutorial recipe image loaded successfully");
+            recipeImage = img;
+            isLoadingImage = false;
+          },
+          // Error callback
+          (err) => {
+            console.error("Error loading tutorial recipe image:", err);
+            recipeImage = null;
+            isLoadingImage = false;
+          }
+        );
+      }
+    } catch (error) {
+      console.error("Error loading tutorial recipe:", error);
+      loadingError = true;
+      isLoadingRecipe = false;
+      isLoadingImage = false;
+      recipeDataLoadedForStats = true;
+      throw error;
+    }
   }
   
   function triggerHapticFeedback(type) {
@@ -1672,208 +1028,358 @@ let intermediate_combinations = [
     }
   }
   
-  // Add touch support for mobile devices
-  function touchStarted() {
-    // Prevent default touch behavior to avoid scrolling
-    if (touches.length > 0) {
-      let touchX = touches[0].x;
-      let touchY = touches[0].y;
+  // function touchStarted() { ... } // MOVED to interaction.js
+  
+  // Function to check if user has completed today's recipe - APlasker
+  async function checkTodayCompletion() {
+    try {
+      console.log("Checking if user has completed today's recipe...");
+      completionCheckInProgress = true;
+      completionCheckStartTime = Date.now();
       
-      console.log(`Touch started at ${touchX}, ${touchY}`);
+      // Wait for auth to be ready - more robust waiting
+      let authAttempts = 0;
+      while ((!window.authState || !window.authState.hasOwnProperty('isAuthenticated')) && authAttempts < 20) {
+        console.log(`Waiting for auth state to initialize... attempt ${authAttempts + 1}`);
+        await new Promise(resolve => setTimeout(resolve, 200));
+        authAttempts++;
+      }
       
-      // Handle the same logic as mousePressed but with touch coordinates
-      if (!gameStarted) {
-        // Check if start button was touched
-        if (startButton.isInside(touchX, touchY)) {
-          startButton.handleClick();
-          return false;
-        }
-      } else if (gameWon) {
-        // Check if buttons were touched
-        if (shareButton.isInside(touchX, touchY)) {
-          shareButton.handleClick();
-          return false;
-        }
-        if (recipeButton.isInside(touchX, touchY)) {
-          recipeButton.handleClick();
-          return false;
-        }
+      if (!window.authState) {
+        console.log("Auth state never initialized, proceeding with normal flow");
+        completionCheckInProgress = false;
+        proceedWithNormalFlow();
+        return;
+      }
+      
+      // If user is not authenticated, proceed with normal flow
+      console.log("Auth state when checking:", {
+        authState: window.authState,
+        isAuthenticated: window.authState?.isAuthenticated,
+        hasUserId: !!window.authState?.user?.id,
+        isAnonymous: window.authState?.isAnonymous
+      });
+      
+      if (!window.authState?.isAuthenticated || !window.authState?.user?.id) {
+        console.log("User not authenticated, proceeding with normal flow");
+        completionCheckInProgress = false;
+        proceedWithNormalFlow();
+        return;
+      }
+      
+      const userId = window.authState.user.id;
+      console.log("Checking completions for authenticated user:", userId.substring(0, 8) + '...');
+      
+      // Get today's recipe and user's recent completions in parallel
+      const [todayRecipe, userCompletions] = await Promise.all([
+        fetchTodayRecipe(),
+        getUserCompletions(userId, 10) // Get last 10 completions to be safe
+      ]);
+      
+      // Check for timeout
+      if (Date.now() - completionCheckStartTime > completionCheckTimeout) {
+        throw new Error("Completion check timed out");
+      }
+      
+      if (!todayRecipe) {
+        console.log("Could not load today's recipe, proceeding with normal flow");
+        completionCheckInProgress = false;
+        proceedWithNormalFlow();
+        return;
+      }
+      
+      if (!userCompletions || userCompletions.length === 0) {
+        console.log("No completions found, proceeding with normal flow");
+        completionCheckInProgress = false;
+        proceedWithNormalFlow(todayRecipe);
+        return;
+      }
+      
+      // Check if user completed today's recipe
+      const todayCompletion = userCompletions.find(completion => 
+        completion.rec_id === todayRecipe.rec_id
+      );
+      
+      if (todayCompletion) {
+        console.log("Found completion for today's recipe, loading win screen");
+        loadWinScreenFromCompletion(todayRecipe, todayCompletion);
       } else {
-        // Check if hint button was touched
-        if (!showingHint && hintButton && hintButton.isInside(touchX, touchY)) {
-          console.log("Hint button touched");
-          showHint(); // Directly call showHint instead of using handleClick
-          triggerHapticFeedback('success');
-          return false;
-        }
-        
-        // Check if a vessel was touched
-        for (let v of vessels) {
-          if (v.isInside(touchX, touchY)) {
-            draggedVessel = v;
-            offsetX = touchX - v.x;
-            offsetY = touchY - v.y;
-            v.targetScale = 1.1; // Slight scale up when dragging
-            triggerHapticFeedback('success'); // Haptic feedback on successful drag
-            return false;
-          }
-        }
+        console.log("No completion for today's recipe, proceeding with normal flow");
+        completionCheckInProgress = false;
+        proceedWithNormalFlow(todayRecipe);
+      }
+      
+    } catch (error) {
+      console.error("Error checking today's completion:", error);
+      
+      // Check if we timed out
+      if (Date.now() - completionCheckStartTime > completionCheckTimeout) {
+        showCompletionErrorModal();
+      } else {
+        // Other error, proceed with normal flow
+        completionCheckInProgress = false;
+        proceedWithNormalFlow();
       }
     }
-    return false; // Prevent default
   }
   
-  // Add touch moved handler for dragging vessels
-  function touchMoved() {
-    if (draggedVessel) {
-      if (touches.length > 0) {
-        let touchX = touches[0].x;
-        let touchY = touches[0].y;
+  // Function to proceed with normal game flow (title screen then recipe loading) - APlasker
+  function proceedWithNormalFlow(recipeData = null) {
+    if (recipeData) {
+      // We already have today's recipe data, use it
+      recipe_data = recipeData;
+      recipe = recipeData;
+      intermediate_combinations = recipeData.intermediateCombinations;
+      final_combination = recipeData.finalCombination;
+      easter_eggs = recipeData.easterEggs;
+      ingredients = recipeData.baseIngredients;
+      base_ingredients = recipeData.baseIngredients;
+      recipeUrl = recipeData.recipeUrl;
+      recipeDescription = recipeData.description || "A delicious recipe that's sure to please everyone at the table!";
+      recipeAuthor = recipeData.author || "";
+      
+      isLoadingRecipe = false;
+      loadingComplete = true; // Trigger split reveal - APlasker
+      console.log("🎯 Loading complete flag set to true - split reveal should trigger");
+      recipeDataLoadedForStats = true;
+      
+      initializeGame();
+      
+      // Load image in background
+      if (recipeData.imgUrl) {
+        console.log("Loading recipe image in background from URL:", recipeData.imgUrl);
+        isLoadingImage = true;
         
-        draggedVessel.x = touchX - offsetX;
-        draggedVessel.y = touchY - offsetY;
+        loadImage(
+          recipeData.imgUrl,
+          (img) => {
+            console.log("Recipe image loaded successfully");
+            recipeImage = img;
+            isLoadingImage = false;
+          },
+          (err) => {
+            console.error("Error loading recipe image:", err);
+            recipeImage = null;
+            isLoadingImage = false;
+          }
+        );
       }
-      return false; // Prevent default
+    } else {
+      // Load recipe data normally
+      if (typeof isPlaytestMode === 'undefined' || !isPlaytestMode) {
+        loadRecipeData();
+      } else {
+        console.log("Playtest mode: waiting for date selection");
+        isLoadingRecipe = false;
+      }
     }
-    return true;
   }
   
-  // Add touch ended handler for dropping vessels
-  function touchEnded() {
-    if (draggedVessel) {
-      draggedVessel.targetScale = 1; // Reset scale
+  // Function to load win screen from completion data - APlasker
+  function loadWinScreenFromCompletion(recipeData, completionData) {
+    try {
+      console.log("Loading win screen from completion data:", completionData);
       
-      let overVessel = null;
-      let overVesselIndex = -1;
-      let overHintVessel = false;
-      
-      if (touches.length > 0) {
-        let touchX = touches[0].x;
-        let touchY = touches[0].y;
-        
-        // Check if dragged over another vessel
-        for (let i = 0; i < vessels.length; i++) {
-          let v = vessels[i];
-          if (v !== draggedVessel && v.isInside(touchX, touchY)) {
-            overVessel = v;
-            overVesselIndex = i;
-            break;
-          }
-        }
-        
-        // Check if dragged over hint vessel
-        if (showingHint && hintVessel && hintVessel.isInside(touchX, touchY)) {
-          overHintVessel = true;
-        }
+      // FIXED: Ensure user is not considered anonymous if we have completion data
+      // If we have completion data, the user must be authenticated with a real account
+      if (window.authState && window.authState.isAuthenticated) {
+        window.authState.isAnonymous = false;
+        console.log("User auth state updated - not anonymous since completion data exists");
       }
       
-      // Process the same logic as mouseReleased
-      if (overVessel) {
-        // Regular vessel combination
-        // Increment turn counter
-        turnCounter++;
-        
-        let new_v = combineVessels(draggedVessel, overVessel);
-        if (new_v) {
-          // Create animation particles
-          createCombineAnimation(draggedVessel.x, draggedVessel.y, draggedVessel.color, new_v.x, new_v.y);
-          createCombineAnimation(overVessel.x, overVessel.y, overVessel.color, new_v.x, new_v.y);
-          
-          // Get the index of the dragged vessel
-          let draggedIndex = vessels.indexOf(draggedVessel);
-          
-          // Remove old vessels
-          vessels = vessels.filter(v => v !== draggedVessel && v !== overVessel);
-          
-          // Insert the new vessel at the position of the target vessel
-          vessels.splice(overVesselIndex, 0, new_v);
-          
-          // Re-arrange vessels with the new vessel in place
-          arrangeVessels();
-          
-          // Pulse the new vessel
-          new_v.pulse();
-          
-          // Store the current move history length to detect if checkForMatchingVessels adds moves
-          let originalMoveHistoryLength = moveHistory.length;
-          
-          // Check if the new vessel matches the current hint
-          if (showingHint && hintVessel) {
-            // Check if this vessel matches the hint
-            checkForMatchingVessels();
-          }
-          
-          // Only add to move history if it wasn't already added by checkForMatchingVessels
-          if (moveHistory.length === originalMoveHistoryLength) {
-            // Add successful move to history with the color of the new vessel
-            moveHistory.push(new_v.color);
-          }
-          
-          // Check if the game is won
-          if (vessels.length === 1 && vessels[0].name === final_combination.name) {
-            gameWon = true;
-            triggerHapticFeedback('completion'); // Haptic feedback on game completion
-          } else {
-            // Trigger haptic feedback for successful combination
-            triggerHapticFeedback('medium');
-          }
-        } else {
-          // Combination failed, snap back
-          draggedVessel.snapBack();
-          // Add unsuccessful move to history (black)
-          moveHistory.push('black');
-          triggerHapticFeedback('error'); // Haptic feedback on unsuccessful move
-        }
-      } else if (overHintVessel) {
-        // Try to add the dragged vessel to the hint
-        if (hintVessel.addIngredient(draggedVessel)) {
-          // Successfully added to hint
-          // Remove the vessel that was added to the hint
-          vessels = vessels.filter(v => v !== draggedVessel);
-          arrangeVessels();
-          
-          // Add red move to history (not the original vessel color)
-          moveHistory.push('#FF5252');
-          
-          // Check if hint is complete
-          if (hintVessel.isComplete()) {
-            // Convert hint to regular vessel
-            let newVessel = hintVessel.toVessel();
-            vessels.push(newVessel);
-            arrangeVessels();
-            
-            // Reset hint
-            hintVessel = null;
-            showingHint = false;
-            
-            // Check win condition
-            if (vessels.length === 1 && vessels[0].name === final_combination.name) {
-              gameWon = true;
-              triggerHapticFeedback('completion'); // Haptic feedback on game completion
-            }
-          }
-        } else {
-          draggedVessel.snapBack();
-          // Add unsuccessful move to history (black)
-          moveHistory.push('black');
-          triggerHapticFeedback('error'); // Haptic feedback on unsuccessful move
-        }
+      // Set recipe data
+      recipe_data = recipeData;
+      recipe = recipeData;
+      intermediate_combinations = recipeData.intermediateCombinations;
+      final_combination = recipeData.finalCombination;
+      easter_eggs = recipeData.easterEggs;
+      ingredients = recipeData.baseIngredients;
+      base_ingredients = recipeData.baseIngredients;
+      recipeUrl = recipeData.recipeUrl;
+      recipeDescription = recipeData.description || "A delicious recipe that's sure to please everyone at the table!";
+      recipeAuthor = recipeData.author || "";
+      
+      // Set game state to won
+      gameWon = true;
+      gameStarted = true;
+      gameTimerActive = false;
+      
+      // Reconstruct game stats from completion data
+      gameTimer = completionData.total_time_seconds || 0;
+      hintCount = completionData.hints_used || 0;
+      moveCount = completionData.mistakes_total || 0; // Assuming mistakes correlate with move count
+      
+      // Reconstruct move history for star calculation
+      moveHistory = [];
+      for (let i = 0; i < completionData.mistakes_total; i++) {
+        moveHistory.push('black'); // Add mistake markers
+      }
+      
+      // Set grades and scores
+      const starScore = completionData.star_score || 0;
+      isAPlus = starScore >= 6;
+      
+      // Calculate letter grade from star score
+      if (starScore >= 6) {
+        letterGrade = 'A+';
+      } else if (starScore >= 5) {
+        letterGrade = 'A';
+      } else if (starScore >= 4) {
+        letterGrade = 'B';
+      } else if (starScore >= 3) {
+        letterGrade = 'C';
       } else {
-        draggedVessel.snapBack();
+        letterGrade = 'X';
       }
       
-      draggedVessel = null;
+      // Initialize other necessary game variables
+      vessels = [];
+      displayedVessels = [];
+      usedIngredients = new Set();
+      combine_animations = [];
+      animations = [];
+      eggModals = [];
+      
+      // Set loading states
+      isLoadingRecipe = false;
+      recipeDataLoadedForStats = true;
+      completionCheckInProgress = false;
+      
+      console.log("Win screen state loaded successfully");
+      
+      // Load image in background
+      if (recipeData.imgUrl) {
+        console.log("Loading recipe image in background from URL:", recipeData.imgUrl);
+        isLoadingImage = true;
+        
+        loadImage(
+          recipeData.imgUrl,
+          (img) => {
+            console.log("Recipe image loaded successfully");
+            recipeImage = img;
+            isLoadingImage = false;
+          },
+          (err) => {
+            console.error("Error loading recipe image:", err);
+            recipeImage = null;
+            isLoadingImage = false;
+          }
+        );
+      }
+      
+    } catch (error) {
+      console.error("Error loading win screen from completion:", error);
+      // Fall back to normal flow
+      completionCheckInProgress = false;
+      proceedWithNormalFlow();
     }
-    return false; // Prevent default
+  }
+  
+  // Function to show completion error modal - APlasker
+  function showCompletionErrorModal() {
+    showingCompletionError = true;
+    completionCheckInProgress = false;
+    modalActive = true;
+    
+    // Create error modal
+    completionErrorModal = {
+      visible: true,
+      title: "Loading Error",
+      message: "Your dish is taking longer to prep than we anticipated. Please try ordering again",
+      buttonText: "Refresh",
+      action: () => {
+        window.location.reload();
+      }
+    };
+  }
+  
+  // Function to draw completion error modal - APlasker
+  function drawCompletionErrorModal() {
+    if (!showingCompletionError || !completionErrorModal?.visible) return;
+    
+    // Draw modal overlay
+    push();
+    fill(0, 0, 0, 150);
+    noStroke();
+    rect(0, 0, windowWidth, windowHeight);
+    pop();
+    
+    // Calculate modal dimensions
+    const modalWidth = Math.min(playAreaWidth * 0.8, 400);
+    const modalHeight = Math.min(playAreaHeight * 0.4, 250);
+    const modalX = playAreaX + playAreaWidth / 2;
+    const modalY = playAreaY + playAreaHeight / 2;
+    
+    // Draw modal background
+    push();
+    rectMode(CENTER);
+    fill(255);
+    stroke(COLORS.primary);
+    strokeWeight(2);
+    rect(modalX, modalY, modalWidth, modalHeight, 12);
+    pop();
+    
+    // Draw modal content
+    push();
+    
+    // Title
+    textAlign(CENTER, CENTER);
+    textSize(Math.max(modalWidth * 0.06, 18));
+    textStyle(BOLD);
+    fill(COLORS.text);
+    text(completionErrorModal.title, modalX, modalY - modalHeight * 0.25);
+    
+    // Message
+    textSize(Math.max(modalWidth * 0.04, 14));
+    textStyle(NORMAL);
+    text(completionErrorModal.message, modalX, modalY - modalHeight * 0.05, modalWidth * 0.8);
+    
+    // Button
+    const buttonWidth = modalWidth * 0.3;
+    const buttonHeight = 40;
+    const buttonY = modalY + modalHeight * 0.2;
+    
+    const buttonHovered = dist(mouseX, mouseY, modalX, buttonY) < buttonWidth/2;
+    
+    rectMode(CENTER);
+    fill(buttonHovered ? lerpColor(color(COLORS.primary), color(255), 0.2) : COLORS.primary);
+    stroke(COLORS.primary); // Match stroke to fill color for consistency
+    strokeWeight(3); // Standardized stroke weight
+    rect(modalX, buttonY, buttonWidth, buttonHeight, 8);
+    
+    fill('white');
+    noStroke();
+    textAlign(CENTER, CENTER);
+    textSize(Math.max(buttonHeight * 0.25, 12));
+    textStyle(BOLD);
+    text(completionErrorModal.buttonText, modalX, buttonY);
+    
+    pop();
+    
+    // Handle button click
+    if (buttonHovered) {
+      cursor(HAND);
+    }
   }
   
   // New function to initialize the game after data is loaded
   function initializeGame() {
+    // Determine layout type based on number of ingredients
+    // Use small layout for recipes with 12 or fewer ingredients
+    currentLayoutType = ingredients.length <= 12 ? 'small' : 'big';
+    console.log(`Setting layout type to ${currentLayoutType} based on ${ingredients.length} ingredients`);
+
     // Create vessels for each ingredient
     ingredients.forEach((ing) => {
       let v = new Vessel([ing], [], null, 'white', 0, 0, 0, 0); // Size will be set in arrangeVessels
       vessels.push(v);
     });
+    
+    // Initialize byline transition variables - APlasker
+    nextByline = "";
+    bylineTransitionState = "stable";
+    bylineOpacity = 255;
+    isTransitioning = false;
     
     // Randomize the order of vessels
     shuffleArray(vessels);
@@ -1881,63 +1387,94 @@ let intermediate_combinations = [
     // Initial arrangement of vessels
     arrangeVessels();
     
-    // Calculate the lowest vessel position
-    let lowestY = 0;
-    vessels.forEach(v => {
-      lowestY = Math.max(lowestY, v.y + v.h/2);
-    });
+    // Set hint button at a fixed position from bottom of screen
+    hintButtonY = height - 150; // 150px from bottom of screen
     
-    // Set hint button position 20 pixels below the lowest vessel
-    hintButtonY = lowestY + 20;
+    // Store the initial hint button position
+    initialHintButtonY = hintButtonY;
     
-    // Adjust button sizes based on play area width
-    let buttonWidth = min(120, playAreaWidth * 0.25);
-    let buttonHeight = min(40, buttonWidth * 0.4);
-    let startButtonWidth = min(180, playAreaWidth * 0.4);
-    let startButtonHeight = min(60, startButtonWidth * 0.33);
+    // Calculate button dimensions using relative values
+    // Hint button - smaller action button
+    let buttonWidth = playAreaWidth * 0.15; // 15% of play area width
+    let buttonHeight = buttonWidth * 0.333; // Maintain aspect ratio
+    // Ensure minimum sizes for usability
+    buttonWidth = Math.max(buttonWidth, 80);
+    buttonHeight = Math.max(buttonHeight, 30);
     
-    // Create share and recipe buttons - position relative to play area
-    shareButton = new Button(
-      playAreaX + playAreaWidth * 0.35, 
-      playAreaY + playAreaHeight * 0.85, 
-      buttonWidth, 
-      buttonHeight, 
-      "Share Score", 
-      shareScore
-    );
+    // Start button - larger call to action
+    let startButtonWidth = playAreaWidth * 0.25; // 25% of play area width (increased from 20%)
+    let startButtonHeight = startButtonWidth * 0.4; // Maintain aspect ratio
+    // Enforce minimum sizes
+    startButtonWidth = Math.max(startButtonWidth, 100);
+    startButtonHeight = Math.max(startButtonHeight, 40);
     
-    recipeButton = new Button(
-      playAreaX + playAreaWidth * 0.65, 
-      playAreaY + playAreaHeight * 0.85, 
-      buttonWidth, 
-      buttonHeight, 
-      "View Recipe", 
-      viewRecipe
-    );
-    
-    // Create hint button with white background and grey outline
+    // Create hint button with white background and no border
     hintButton = new Button(
-      playAreaX + playAreaWidth * 0.5, 
+      playAreaX + playAreaWidth * 0.5, // Center horizontally
       hintButtonY, 
       buttonWidth, 
       buttonHeight, 
       "Hint", 
       showHint, 
       'white', 
-      '#FF5252'
+      '#FF5252',
+      null // No border color
     );
     
-    // Create start button
+    // Set text to bold and ensure it's not circular
+    hintButton.textBold = true;
+    hintButton.isCircular = false;
+    
+    // Create start button - positioned in the center
     startButton = new Button(
-      playAreaX + playAreaWidth * 0.5, 
-      playAreaY + playAreaHeight * 0.85, 
+      playAreaX + playAreaWidth * 0.5, // Position at 50% of play area width (center)
+      playAreaY + playAreaHeight * 0.88, // Position at 88% down the play area
       startButtonWidth, 
       startButtonHeight, 
-      "Let's Get Cooking!", 
+      "Cook!", 
       startGame, 
-      COLORS.secondary, 
-      'white'
+      COLORS.primary, // Green background (swapped from white)
+      'white', // White text (swapped from green)
+      null // No border color needed as we're using vessel style
     );
+    
+    // Set text to bold for Cook! button
+    startButton.textBold = true;
+    // Enable vessel-style outline - APlasker
+    startButton.useVesselStyle = true;
+    startButton.outlineColor = COLORS.peach; // Use peach color for outline
+    startButton.simplifiedOutline = true; // Use simplified outline with only inner black line - APlasker
+    
+    // Calculate corner radius for Cook button
+    const cookButtonCornerRadius = Math.max(startButtonWidth * 0.15, 10);
+    
+    // Create tutorial button - APlasker - AFTER creating the start button so we can reference its position
+    // Calculate tutorial button position to be to the left of the start button with appropriate spacing
+    const tutorialButtonWidth = startButtonWidth * 0.5; // Half the width of the start button
+    const tutorialButtonX = startButton.x - startButtonWidth/2 - tutorialButtonWidth/2 - 20; // Position to the left with 20px gap
+    
+    tutorialButton = new Button(
+      tutorialButtonX, // Position to the left of the Cook button with spacing
+      playAreaY + playAreaHeight * 0.88, // Same vertical position as Cook button
+      tutorialButtonWidth, // Half the width of the start button
+      startButtonHeight, // Same height as start button
+      "First\nTime?", // Stack text on two lines
+      startTutorial, 
+      'white', // White background 
+      COLORS.primary, // Green text
+      COLORS.primary // Green outline to match text
+    );
+    
+    // Set text to NOT bold for Tutorial button
+    tutorialButton.textBold = false;
+    // Enable vessel-style outline - APlasker
+    tutorialButton.useVesselStyle = true;
+    tutorialButton.outlineColor = COLORS.peach; // Use peach color for outline
+    tutorialButton.simplifiedOutline = true; // Use simplified outline with only inner black line - APlasker
+    // Reduce text size for the stacked text
+    tutorialButton.textSizeMultiplier = 0.8;
+    // Use the same corner radius as the Cook button for visual consistency - APlasker
+    tutorialButton.customCornerRadius = cookButtonCornerRadius;
     
     // Reset game state
     gameWon = false;
@@ -1947,6 +1484,29 @@ let intermediate_combinations = [
     gameStarted = false;
     showingHint = false;
     hintVessel = null;
+    hintCount = 0; // Reset hint count when game starts
+    completedGreenVessels = []; // Reset completed green vessels - APlasker
+    partialCombinations = []; // Reset partial combinations
+    startedCombinations = []; // Reset started combinations tracking - APlasker
+    hintedCombos = []; // Track which combos have been hinted
+    lastHintTime = 0; // Track when the last hint was requested
+    hintCooldown = 500; // 0.5 second cooldown between hints (in milliseconds)
+    
+    // Reset byline state
+    currentByline = "Drop one ingredient on to another to combine!"; // Updated default byline - APlasker
+    nextByline = "";
+    bylineTimer = 0;
+    bylineTransitionState = "stable";
+    bylineOpacity = 255;
+    isTransitioning = false;
+    
+    // Reset message tracking
+    firstErrorOccurred = false;
+    firstPartialComboCreated = false;
+    usedPartialComboMessages = [];
+    usedErrorMessages = [];
+    firstInactivityMessageShown = false; // Added to track first inactivity message - APlasker
+    inactivityReminderCount = 0;
   }
   
   // Function to get current time in EST for debugging
@@ -1965,71 +1525,2242 @@ let intermediate_combinations = [
     return now.toLocaleString('en-US', options);
   }
   
-  // Function to draw the floral pattern border
-  function drawFloralBorder() {
-    // Only draw the border if there's space around the play area
-    if (windowWidth <= maxPlayWidth + 2 * playAreaPadding) return;
+  // function touchEnded() { ... } // MOVED to interaction.js
+  
+  // function touchMoved() { ... } // MOVED to interaction.js
+  
+  // Global variable for card hover state
+  let isMouseOverCard = false;
+  
+  // Function to transition to a new byline message with fade effect
+  function updateBylineWithTransition(newMessage, duration = bylineHintDuration) {
+    // Prevent interrupting ongoing transitions
+    if (isTransitioning) return;
     
-    // Draw flowers in a grid pattern only on the left and right sides of the play area
-    const flowerSpacing = 40; // Increased from 30 for larger pattern
-    const petalSize = 6; // Increased from 4 for larger flowers
+    // Don't transition if the message is the same
+    if (currentByline === newMessage) return;
     
-    // Calculate the available space on each side
-    const leftSpace = playAreaX;
-    const rightSpace = windowWidth - (playAreaX + playAreaWidth);
+    // Set transition flag
+    isTransitioning = true;
     
-    // Calculate how many flowers can fit on each side
-    const leftColumns = Math.floor(leftSpace / flowerSpacing);
-    const rightColumns = Math.floor(rightSpace / flowerSpacing);
+    // Store the new message for after fadeout
+    nextByline = newMessage;
     
-    // Calculate starting positions to center the pattern on each side
-    const leftStart = playAreaX - (leftColumns * flowerSpacing);
-    const rightStart = playAreaX + playAreaWidth;
+    // Store the duration for the message
+    transitionDuration = duration;
     
-    // Draw on the left side (from left edge to play area)
-    for (let x = leftStart + flowerSpacing/2; x < playAreaX; x += flowerSpacing) {
-      for (let y = flowerSpacing/2; y < height - flowerSpacing/2; y += flowerSpacing) {
-        // Alternate between different colors for variety
-        if ((x + y) % (flowerSpacing * 3) < flowerSpacing) {
-          drawFlower(x, y, petalSize, COLORS.primary); // Green
-        } else if ((x + y) % (flowerSpacing * 3) < flowerSpacing * 2) {
-          drawFlower(x, y, petalSize, COLORS.secondary); // Red/Orange
-        } else {
-          drawFlower(x, y, petalSize, COLORS.tertiary); // Yellow
-        }
+    // Start fadeout
+    bylineTransitionState = "fading-out";
+    bylineOpacity = 255;
+  }
+  
+  // Function to handle showing random error messages - APlasker
+  function showRandomErrorMessage() {
+    // APlasker - Track mistake in analytics
+    if (typeof trackMistake === 'function') {
+      trackMistake();
+    }
+
+    // For tutorial mode, use specific tutorial bylines
+    if (isTutorialMode) {
+      tutorialErrorCount++;
+      
+      if (tutorialErrorCount === 1 && !tutorialMessagesShown.firstErrorShown) {
+        // First error in tutorial - show message if it hasn't been shown yet
+        updateBylineWithTransition(tutorialBylines.firstError, bylineHintDuration);
+        tutorialMessagesShown.firstErrorShown = true;
+      } else if (tutorialErrorCount > 1 && !tutorialMessagesShown.subsequentErrorsShown) {
+        // Second or subsequent errors in tutorial - show message if it hasn't been shown yet
+        updateBylineWithTransition(tutorialBylines.subsequentErrors, bylineHintDuration);
+        tutorialMessagesShown.subsequentErrorsShown = true;
+      }
+      
+      // Update last action timestamp
+      lastAction = frameCount;
+      return;
+    }
+    
+    // Standard game error message logic (existing code)
+    let probability = firstErrorOccurred ? 0.33 : 0.75;
+    
+    // Mark first error as occurred
+    if (!firstErrorOccurred) {
+      firstErrorOccurred = true;
+    }
+    
+    // Random chance to show message based on probability
+    if (Math.random() < probability) {
+      // Find messages that haven't been used yet
+      const unusedMessages = errorMessages.filter(msg => !usedErrorMessages.includes(msg));
+      
+      // If all messages have been used, reset the tracking
+      if (unusedMessages.length === 0) {
+        usedErrorMessages = [];
+        // Now all messages are unused
+        const randomMessage = errorMessages[Math.floor(Math.random() * errorMessages.length)];
+        usedErrorMessages.push(randomMessage);
+        updateBylineWithTransition(randomMessage, bylineHintDuration);
+      } else {
+        // Select a random unused message
+        const randomMessage = unusedMessages[Math.floor(Math.random() * unusedMessages.length)];
+        // Track this message as used
+        usedErrorMessages.push(randomMessage);
+        // Display the message
+        updateBylineWithTransition(randomMessage, bylineHintDuration);
       }
     }
     
-    // Draw on the right side (from play area to right edge)
-    for (let x = rightStart; x < rightStart + (rightColumns * flowerSpacing); x += flowerSpacing) {
-      for (let y = flowerSpacing/2; y < height - flowerSpacing/2; y += flowerSpacing) {
-        // Alternate between different colors for variety
-        if ((x + y) % (flowerSpacing * 3) < flowerSpacing) {
-          drawFlower(x, y, petalSize, COLORS.primary); // Green
-        } else if ((x + y) % (flowerSpacing * 3) < flowerSpacing * 2) {
-          drawFlower(x, y, petalSize, COLORS.secondary); // Red/Orange
-        } else {
-          drawFlower(x, y, petalSize, COLORS.tertiary); // Yellow
-        }
-      }
+    // Update last action timestamp
+    lastAction = frameCount;
+  }
+  
+  // Variables for the help icon
+  let helpIconX, helpIconY, helpIconSize;
+  let isHelpIconHovered = false;
+  let helpButtonAnimationProgress = 0; // 0 = rectangular, 1 = circular
+  let helpButtonAnimating = false;
+  let helpButtonAnimationDuration = 7; // Animation duration in frames (reduced for 4x speed)
+  
+  // Variable to track if recipe data is fully loaded for stats display
+  let recipeDataLoadedForStats = false;
+  
+  // Function to draw the help icon
+  function drawHelpIcon() {
+    // Don't show the help icon on the title screen at all
+    if (!gameStarted) {
+      return;
+    }
+    
+    // Calculate the 93% horizontal position in the play area
+    const finalCircleX = playAreaX + (playAreaWidth * 0.93);
+    
+    // Position vertically at 2.25% of play area height from the top
+    helpIconSize = Math.max(playAreaWidth * 0.032, 20); // 3.2% of play area width, min 20px
+    
+    // Set helpIconX to be the final circle position
+    helpIconX = finalCircleX;
+    helpIconY = playAreaY + (playAreaHeight * 0.0225); // 2.25% of play area height from the top
+    
+    // Always use circle hit detection
+    isHelpIconHovered = dist(mouseX, mouseY, helpIconX, helpIconY) < helpIconSize/2;
+    
+    // Get the appropriate color (pink when hovered, green normally) - same as hint button
+    const buttonColor = isHelpIconHovered ? COLORS.secondary : COLORS.primary;
+    
+    // Draw the button shape with simple green fill (matching hint button style)
+    fill(buttonColor);
+    noStroke();
+    circle(helpIconX, helpIconY, helpIconSize);
+    
+    // Draw the "?" text in white (matching hint button text)
+    fill('white');
+    noStroke();
+    textAlign(CENTER, CENTER);
+    
+    // Use the same font size calculation as vessels (1.8% of screen height)
+    const fontSize = Math.max(windowHeight * 0.018, 10);
+    textSize(fontSize);
+    textStyle(BOLD);
+    
+    // Draw the question mark with optimal centering
+    text("?", helpIconX, helpIconY);
+    
+    // Reset text style
+    textStyle(NORMAL);
+    
+    // Change cursor when hovering
+    if (isHelpIconHovered) {
+      cursor(HAND);
     }
   }
   
-  // Function to draw a single flower
-  function drawFlower(x, y, petalSize, color) {
-    // Set the flower color
-    fill(color);
-    noStroke();
+  
+  // Update the move history when a new vessel is created
+  function checkAddToMoveHistory(new_v) {
+    // Ensure we're using the COLORS object for consistency
+    if (new_v.color === COLORS.vesselYellow) {
+      moveHistory.push(COLORS.vesselYellow);
+    } else if (new_v.color === COLORS.green || new_v.color === COLORS.vesselGreen || new_v.color === COLORS.primary) {
+      moveHistory.push(COLORS.green); // Use our explicit green color for all green vessels
+    } else if (COMPLETED_VESSEL_COLORS.includes(new_v.color)) {
+      // For our new colored vessels, add the actual color - APlasker
+      moveHistory.push(new_v.color);
+    } else if (new_v.color === COLORS.vesselBase) {
+      moveHistory.push(COLORS.vesselBase);
+    } else if (new_v.color === COLORS.vesselHint) {
+      // Count hint vessels in move history
+      moveHistory.push(COLORS.vesselHint);
+    } else {
+      // Default to white for any other colors
+      moveHistory.push('white');
+    }
+  }
+  
+  // function isModalElement(x, y) { ... } // MOVED to interaction.js
+  
+  function drawTitle() {
+    // Set text properties
+    textAlign(CENTER, CENTER);
     
-    // Draw petals
-    for (let i = 0; i < 6; i++) {
-      let angle = i * PI / 3;
-      let px = x + cos(angle) * petalSize * 1.5;
-      let py = y + sin(angle) * petalSize * 1.5;
-      ellipse(px, py, petalSize * 1.2, petalSize * 1.2);
+    // Calculate title size relative to play area width
+    const titleSize = Math.max(playAreaWidth * 0.055, 30); // 5.5% of play area width, min 30px
+    textSize(titleSize);
+    
+    // Use a bold sans-serif font
+    textStyle(BOLD);
+    textFont('Helvetica, Arial, sans-serif');
+    
+    // Title text
+    const title = "COMBO MEAL";
+    
+    // Calculate the total width of the title to center each letter
+    let totalWidth = 0;
+    let letterWidths = [];
+    
+    // First calculate individual letter widths
+    for (let i = 0; i < title.length; i++) {
+      let letterWidth = textWidth(title[i]);
+      letterWidths.push(letterWidth);
+      totalWidth += letterWidth;
     }
     
-    // Draw center with a slightly different shade
-    fill(255, 255, 255, 100); // Semi-transparent white for a highlight
-    ellipse(x, y, petalSize, petalSize);
+    // Add kerning (50% increase in spacing)
+    const kerningFactor = 0.5; // 50% extra space
+    let totalKerning = 0;
+    
+    // Calculate total kerning space (only between letters, not at the ends)
+    for (let i = 0; i < title.length - 1; i++) {
+      totalKerning += letterWidths[i] * kerningFactor;
+    }
+    
+    // Starting x position (centered with kerning)
+    let x = playAreaX + playAreaWidth/2 - (totalWidth + totalKerning)/2;
+    
+    // Bubble Pop effect parameters
+    const outlineWeight = 2; // Thinner outline for bubble style
+    const bounceAmount = 2 * Math.sin(frameCount * 0.05); // Subtle bounce animation
+    
+    // Position title at 5% from top of play area (instead of fixed 40px)
+    const titleY = playAreaY + (playAreaHeight * 0.05);
+    
+    // Draw each letter with alternating colors
   }
+  
+  // Tutorial mode variables - Added by APlasker
+  let tutorialButton; // Button for launching tutorial mode
+  let isTutorialMode = false; // Flag to track if we're in tutorial mode
+  let tutorialRecipeDate = "01/01/2001"; // Date to use for the tutorial recipe
+  let tutorialBylines = {
+    start: "Try combining the Tomato with the Garlic!",
+    inactivity: "Tap the question mark up top for the rules!",
+    firstError: "Hmm those don't go together. Try a hint!",
+    subsequentErrors: "Hmm... Flour, tomatos, cheese... could be a pizza?",
+    firstSuccess: "Perfect! What else does it need?",
+    firstComboCompleted: "Nice job! On to the next step!"
+  }; // Object to store tutorial-specific bylines
+  // Flags to track which tutorial messages have been shown - APlasker
+  let tutorialMessagesShown = {
+    startShown: false,
+    inactivityShown: false,
+    firstErrorShown: false,
+    subsequentErrorsShown: false,
+    firstSuccessShown: false,
+    firstComboCompletedShown: false
+  }; // Tracking which messages have been shown
+  let tutorialErrorCount = 0; // Track incorrect combination attempts in tutorial
+  
+  // Function to format time as MM:SS
+  function formatTime(seconds) {
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+  }
+  
+  function draw() {
+    // Set background color
+    background(COLORS.background);
+    
+    // Draw the play area
+    push(); // Isolate play area drawing
+    fill(COLORS.background); // Use the new unified background color
+    stroke(200); // Light grey border for the play area
+    strokeWeight(1);
+    rect(playAreaX, playAreaY, playAreaWidth, playAreaHeight, 10); // Rounded corners for play area
+    pop(); // End play area drawing
+
+    // Handle different game states
+    if (completionCheckInProgress) {
+      // Draw loading screen for completion check - use the existing floral loading pattern
+      textAlign(CENTER, CENTER);
+      textSize(Math.max(playAreaWidth * 0.05, 18)); // Responsive text size
+      fill(COLORS.text);
+      text("Checking your kitchen...", playAreaX + playAreaWidth / 2, playAreaY + playAreaHeight / 2);
+    } else if (showingCompletionError) {
+      // Draw completion error modal
+      drawCompletionErrorModal();
+    } else if (window.profileActive) {
+      // Handle profile screen - APlasker
+      if (typeof drawProfileScreen === 'function') {
+        drawProfileScreen();
+      }
+      
+      // Update animations for profile screen (like bounce animation)
+      for (let i = animations.length - 1; i >= 0; i--) {
+        if (animations[i].update()) {
+          animations.splice(i, 1);
+        } else {
+          animations[i].draw();
+        }
+      }
+    } else if (isLoadingRecipe) {
+      // Draw loading screen centered in the play area
+      textAlign(CENTER, CENTER);
+      textSize(Math.max(playAreaWidth * 0.05, 18)); // Responsive text size
+      fill(COLORS.text);
+      text("Stirring up today's recipe...", playAreaX + playAreaWidth / 2, playAreaY + playAreaHeight / 2);
+    } else if (loadingError) {
+      // Draw error message centered in the play area
+      textAlign(CENTER, CENTER);
+      textSize(Math.max(playAreaWidth * 0.05, 18));
+      fill(COLORS.secondary); // Use secondary color (pinkish) for error
+      text(`Whoops! Couldn't fetch the recipe.\nTry refreshing?`, playAreaX + playAreaWidth / 2, playAreaY + playAreaHeight / 2);
+    } else if (gameWon) {
+      if (typeof drawWinScreen === 'function') {
+        drawWinScreen();
+      }
+    } else if (!gameStarted) {
+      // Draw title screen elements
+      drawTitleScreen();
+    } else {
+      // Game is active - draw game elements
+
+      // Draw byline message - APlasker
+      // Position byline at the top of the play area
+      const bylineX = playAreaX + playAreaWidth / 2;
+      const bylineY = playAreaY + playAreaHeight * 0.05; // 5% from top of play area
+      const bylineSize = Math.max(playAreaWidth * 0.035, 14); // Responsive text size, min 14px
+
+      textAlign(CENTER, CENTER);
+      textSize(bylineSize);
+      textFont(bodyFont); // Ensure bodyFont is used for byline
+      textStyle(NORMAL);
+
+      // Handle byline transition
+      if (bylineTransitionState === "fading-out") {
+        bylineOpacity -= 255 / bylineFadeFrames;
+        if (bylineOpacity <= 0) {
+          bylineOpacity = 0;
+          currentByline = nextByline;
+          bylineTimer = transitionDuration > 0 ? transitionDuration : (isTutorialMode ? bylineHintDuration * 2 : bylineHintDuration) ; // Use longer duration for tutorial messages
+          bylineTransitionState = "fading-in";
+        }
+      } else if (bylineTransitionState === "fading-in") {
+        bylineOpacity += 255 / bylineFadeFrames;
+        if (bylineOpacity >= 255) {
+          bylineOpacity = 255;
+          bylineTransitionState = "stable";
+          isTransitioning = false; // End transition
+          nextByline = ""; // Clear queued message
+        }
+      } else if (bylineTimer > 0) {
+        bylineTimer--;
+        if (bylineTimer === 0 && !isTutorialMode) { // Don't revert tutorial messages automatically
+          // Revert to default byline if timer runs out and not in tutorial
+          updateBylineWithTransition("Drop one ingredient on to another to combine!");
+        }
+      }
+
+      // Apply opacity and draw byline
+      fill(0, 0, 0, bylineOpacity);
+      text(currentByline, bylineX, bylineY, playAreaWidth * 0.9); // Constrain width
+
+      // Draw game timer - APlasker
+      // Position timer below the byline
+      const timerX = playAreaX + playAreaWidth / 2;
+      const timerY = bylineY + bylineSize * 1.5; // Position below byline with spacing
+      const timerTextSize = Math.max(playAreaWidth * 0.027, 11); // Increased from 2.5% to 2.7%, min 11px (up from 10px)
+
+      textAlign(CENTER, CENTER);
+      textSize(timerTextSize);
+      fill(COLORS.text);
+      if (gameTimerActive) {
+        gameTimer = Math.floor((Date.now() - startTime) / 1000);
+      }
+      text(formatTime(gameTimer), timerX, timerY);
+      
+      // APlasker: Draw mistake stars
+      let mistakes = moveHistory.filter(move => move === 'black').length;
+      const maxStars = 5;
+      const starSize = Math.max(playAreaWidth * 0.025, 10); // Responsive star size
+      const starSpacing = starSize * 1.8; // Spacing between stars
+      const totalStarWidth = (maxStars * starSize) + ((maxStars - 1) * (starSpacing - starSize));
+      let starsX = playAreaX + playAreaWidth * 0.07; // Position stars on the left
+      let starsY = timerY + timerTextSize * 1.0;    // Position stars below the timer
+
+      for (let i = 0; i < maxStars; i++) {
+        let starFillColor = (i >= mistakes) ? STAR_YELLOW : STAR_GREY;
+        // Star points outwards, so use starSize for outer radius and starSize*0.4 for inner
+        drawStar(starsX + i * starSpacing, starsY, starSize * 0.4, starSize, 5, starFillColor, STAR_OUTLINE);
+      }
+
+      // Draw vessels
+      for (let v of vessels) {
+        v.update(); // Update scale and position
+        v.draw();
+      }
+
+      // Draw dragged vessel on top
+      if (draggedVessel) {
+        draggedVessel.update(); // Ensure dragged vessel also updates its scale
+        draggedVessel.draw();
+      }
+      
+      // Draw hint button if not showing hint
+      if (!showingHint && hintButton) {
+        hintButton.draw();
+        hintButton.checkHover(mouseX, mouseY);
+      }
+
+      // Draw hint vessel if showing hint
+      if (showingHint && hintVessel) {
+        hintVessel.draw();
+      }
+      
+      // Draw help icon - APlasker
+      if (gameStarted && !gameWon) {
+          drawHelpIcon();
+      }
+
+      // Draw animations
+      for (let i = animations.length - 1; i >= 0; i--) {
+        if (animations[i].update()) {
+          animations.splice(i, 1);
+        } else {
+          animations[i].draw();
+        }
+      }
+      
+      // Draw Easter egg modals on top of everything else
+      for (let i = eggModals.length - 1; i >= 0; i--) {
+        eggModals[i].update();
+        if (eggModals[i].active) {
+          eggModals[i].draw();
+        } else {
+          // Remove inactive modals
+          eggModals.splice(i, 1);
+        }
+      }
+      
+      // Handle inactivity reminder - APlasker
+      if (gameStarted && !gameWon && !draggedVessel && !modalActive && !isTransitioning) {
+        // Dynamic inactivity threshold based on reminders shown
+        const currentInactivityThreshold = baseInactivityThreshold + (inactivityReminderCount * baseInactivityThreshold * 0.5);
+        
+        if (frameCount - lastAction > currentInactivityThreshold) {
+          if (isTutorialMode && !tutorialMessagesShown.inactivityShown) {
+            // Show tutorial inactivity message once
+            updateBylineWithTransition(tutorialBylines.inactivity, bylineHintDuration * 2); // Longer display for tutorial
+            tutorialMessagesShown.inactivityShown = true;
+          } else if (!isTutorialMode) {
+            // Standard game inactivity message (can repeat)
+            updateBylineWithTransition("Need a hand? Try a hint or check the recipe!", bylineHintDuration);
+          }
+          lastAction = frameCount; // Reset inactivity timer
+          inactivityReminderCount++; // Increment reminder count
+        }
+      }
+    }
+    
+    // After drawing all win screen content, draw the flower animation on top if it's active
+    // This was previously in drawWinScreen but needs to be global for other screens
+    if (persistentFlowerAnimation && persistentFlowerAnimation.active) {
+      persistentFlowerAnimation.draw();
+      persistentFlowerAnimation.update();
+    }
+    
+    // Auth modal and terms modal are now drawn in draw.js for consistency
+  }
+  
+  // Function to draw a single star - APlasker
+  function drawStar(x, y, radius1, radius2, npoints, fillColor, outlineColor) {
+    push();
+    fill(fillColor);
+    stroke(outlineColor);
+    strokeWeight(max(1.5, radius1 * 0.2)); // Responsive stroke weight, made thicker
+    strokeJoin(ROUND); // Added to round the points of the star
+    let angle = TWO_PI / npoints;
+    let halfAngle = angle / 2.0;
+    beginShape();
+    for (let a = -PI/2; a < TWO_PI - PI/2; a += angle) { // Start from -PI/2 to make stars point upwards
+      let sx = x + cos(a) * radius2;
+      let sy = y + sin(a) * radius2;
+      vertex(sx, sy);
+      sx = x + cos(a + halfAngle) * radius1;
+      sy = y + sin(a + halfAngle) * radius1;
+      vertex(sx, sy);
+    }
+    endShape(CLOSE);
+    pop();
+  }
+  
+  // Function to get a random color from COMPLETED_VESSEL_COLORS - APlasker
+  function getRandomOutlineColor() {
+    // Always return peach color instead of random color
+    return COLORS.peach;
+  }
+
+  // Add a function to fix recipe card link for Android
+  function viewRecipe() {
+    // Check if we have a URL to open
+    if (!recipeUrl) {
+      console.log("No recipe URL available");
+      return;
+    }
+    
+    console.log("Opening recipe URL:", recipeUrl);
+    
+    // Special handling for Android
+    if (typeof touchSystem !== 'undefined' && touchSystem.isAndroid) { // Check touchSystem exists
+      console.log("Using Android-specific recipe link handling");
+      
+      // Create and trigger a temporary link element
+      const tempLink = document.createElement('a');
+      tempLink.href = recipeUrl;
+      tempLink.target = '_blank';
+      tempLink.rel = 'noopener noreferrer';
+      
+      // Add to DOM temporarily
+      document.body.appendChild(tempLink);
+      
+      // Trigger with small delay to ensure proper handling
+      setTimeout(() => {
+        tempLink.click();
+        // Remove after click
+        document.body.removeChild(tempLink);
+      }, 50);
+    } else {
+      // Standard approach for iOS and other platforms
+      window.open(recipeUrl, '_blank');
+    }
+  }
+
+  // Add a function to fix sharing for Android
+  function shareScore() {
+    // Generate the score text
+    const scoreText = generateScoreText();
+    
+    console.log("Sharing score:", scoreText);
+    
+    // Check if Web Share API is available (preferred method)
+    if (navigator.share) {
+      console.log("Using Web Share API");
+      navigator.share({
+        title: 'Combo Meal Score',
+        text: scoreText
+      }).catch(err => {
+        console.error("Error sharing:", err);
+        // Fallback to clipboard
+        copyToClipboard(scoreText);
+      });
+    } else {
+      // Fallback for platforms without Web Share API
+      console.log("Web Share API not available, using clipboard fallback");
+      copyToClipboard(scoreText);
+    }
+  }
+
+  // Helper function to copy text to clipboard with Android compatibility
+  function copyToClipboard(text) {
+    // Create a temporary textarea
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    
+    // Make it invisible but part of the DOM
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = 0;
+    document.body.appendChild(textarea);
+    
+    // Select and copy
+    textarea.select();
+    
+    try {
+      // Execute copy command
+      const successful = document.execCommand('copy');
+      if (successful) {
+        console.log('Score copied to clipboard');
+        alert('Score copied to clipboard!');
+      } else {
+        console.error('Failed to copy score');
+        // Removed the manual copy alert message
+      }
+    } catch (err) {
+      console.error('Error copying score:', err);
+      // Removed the manual copy alert message
+    }
+    
+    // Clean up
+    document.body.removeChild(textarea);
+  }
+
+  // Helper function to generate score text
+  function generateScoreText() {
+    // Format based on game state
+    const recipeName = final_combination ? final_combination.name : "Unknown Recipe";
+    const moves = moveHistory.length;
+    const hints = hintCount;
+    const time = formatTime(gameTimer);
+    
+    return `Combo Meal: ${recipeName}\nMoves: ${moves} | Hints: ${hints} | Time: ${time}\nPlay at combomeal.app`;
+  }
+  
+  // Helper: Truncate text with ellipsis in the middle if too long for a given width
+  function fitTextWithMiddleEllipsis(text, maxWidth, fontSize, minFontSize = 10) {
+    textSize(fontSize);
+    if (textWidth(text) <= maxWidth) return text;
+
+    // Reduce font size if needed
+    let currentFontSize = fontSize;
+    while (textWidth(text) > maxWidth && currentFontSize > minFontSize) {
+      currentFontSize -= 1;
+      textSize(currentFontSize);
+    }
+    if (textWidth(text) <= maxWidth) return text;
+
+    // If still too long at min font size, use ellipsis in the middle
+    let left = 0;
+    let right = text.length - 1;
+    let result = text;
+    // Always keep at least 2 chars on each side
+    while (right - left > 4) { // Ensure we have enough characters for "L...R"
+      const mid = Math.floor((left + right) / 2);
+      // Try to keep first two and last two characters
+      const attemptLeft = text.slice(0, 2);
+      const attemptRight = text.slice(text.length - 2, text.length);
+      
+      result = attemptLeft + "..." + attemptRight;
+      textSize(currentFontSize); // Ensure correct font size for width check
+      if (textWidth(result) <= maxWidth) return result;
+
+      // If still too long, shorten by removing one from the right side of the left part
+      // This part needs more robust logic for middle ellipsis
+      // For now, if the "L...R" approach fails, we'll take what we have or just truncate.
+      // A simple approach: if "AA...ZZ" is too long, try "A...Z"
+      if (attemptLeft.length > 1 && attemptRight.length > 1) {
+        result = text.slice(0,1) + "..." + text.slice(text.length-1, text.length);
+        if (textWidth(result) <= maxWidth) return result;
+      }
+      
+      // Fallback: if all else fails, just truncate with ellipsis at end
+      result = text;
+      while (textWidth(result + "...") > maxWidth && result.length > 0) {
+        result = result.slice(0, -1);
+      }
+      return result + "...";
+    }
+    // Fallback if text is very short but still too wide (e.g. "WWWW" at small font)
+    result = text;
+    while (textWidth(result + "...") > maxWidth && result.length > 0) {
+        result = result.slice(0, -1);
+    }
+    return result.length > 0 ? result + "..." : "...";
+  }
+
+
+  // Function to split text into lines, ensuring it fits within a max width,
+  // and if it exceeds maxLines, truncates the last line with an ellipsis.
+  // Also ensures single words that are too long are handled gracefully.
+  function splitTextToLinesWithEllipsis(text, maxWidth, maxLines, fontSize, minFontSize = 10) {
+    let lines = [];
+      let currentLine = "";
+      let words = text.split(' ');
+
+      textSize(fontSize);
+
+      for (let i = 0; i < words.length; i++) {
+          let word = words[i];
+          let testLine = currentLine + (currentLine === "" ? "" : " ") + word;
+          
+          // Check if the word itself is too long
+          if (textWidth(word) > maxWidth) {
+              // Word is too long, try to fit it by reducing font or truncating
+              if (currentLine !== "") {
+                  lines.push(currentLine);
+                  currentLine = "";
+              }
+
+              let fittedWord = fitTextWithMiddleEllipsis(word, maxWidth, fontSize, minFontSize);
+              lines.push(fittedWord);
+
+              if (lines.length >= maxLines) {
+                  if (i < words.length -1 || textWidth(fittedWord) > maxWidth) { // more words or current word truncated
+                     lines[maxLines-1] = fitTextWithMiddleEllipsis(lines[maxLines-1], maxWidth, fontSize, minFontSize);
+                     if (!lines[maxLines-1].endsWith("...")) lines[maxLines-1] += "...";
+                  }
+                  return lines.slice(0, maxLines);
+              }
+              currentLine = ""; // Reset current line after handling a very long word
+              continue; 
+          }
+
+
+          if (textWidth(testLine) <= maxWidth) {
+              currentLine = testLine;
+          } else {
+                lines.push(currentLine);
+              currentLine = word;
+          }
+
+          if (lines.length >= maxLines -1 && currentLine !== "") { // If we are about to fill the last allowed line
+              if (i < words.length -1 || textWidth(currentLine) > maxWidth ) { // Check if there are more words OR current line itself is too long
+                  // If so, and we are on the last possible line, truncate currentLine with ellipsis
+                  if (lines.length === maxLines -1) {
+                      currentLine = fitTextWithMiddleEllipsis(currentLine, maxWidth, fontSize, minFontSize);
+                       if (!currentLine.endsWith("...")) currentLine += "...";
+                  }
+              }
+          }
+           if (lines.length >= maxLines) break; // Stop if we have enough lines
+      }
+
+      if (currentLine !== "") {
+        lines.push(currentLine);
+    }
+
+      // Final check if total lines exceed maxLines
+    if (lines.length > maxLines) {
+          let lastLine = lines[maxLines - 1];
+          // Ensure the last line has an ellipsis if it was truncated or if there were more lines
+          lines[maxLines-1] = fitTextWithMiddleEllipsis(lastLine, maxWidth, fontSize, minFontSize);
+          if (!lines[maxLines-1].endsWith("...")) lines[maxLines-1] += "...";
+          return lines.slice(0, maxLines);
+    }
+
+    return lines;
+  }
+
+  // Placeholder for p5.js keyPressed function if needed later
+  function keyPressed() {
+    // Check if the currently focused element is an input or textarea
+    const activeEl = document.activeElement;
+    if (activeEl && (activeEl.tagName === "INPUT" || activeEl.tagName === "TEXTAREA")) {
+      // If it is, allow the default browser action (typing into the field)
+      return true;
+    }
+
+    // Handle auth modal keyboard input (unified design system)
+    if (typeof handleAuthModalKeyboard === 'function' && window.authModal && window.authModal.active) {
+      if (handleAuthModalKeyboard(key, keyCode)) {
+        return false; // Auth modal handled the key
+      }
+    }
+
+    // This function can be used for keyboard interactions if desired.
+    // For example, pressing a key to show a hint or reset the game.
+    // Currently, it's not used for core game mechanics.
+
+    // Example: Press 'h' for a hint
+    // if (gameStarted && !gameWon && !showingHint) {
+    //   showHint();
+    // }
+
+    // Example: Press 'r' to reset the game (after win or during play)
+    // if (gameStarted || gameWon) {
+    //   // Reset game state and re-initialize
+    //   // This would involve calling initializeGame() or a similar reset function
+    // }
+    return false; // Prevent default browser action for other key presses
+  }
+  
+  // Function to draw the profile screen - APlasker
+  function drawProfileScreen() {
+    // Use same background as rest of game
+    background(COLORS.background);
+    
+    // Draw floral pattern around the entire screen, outside the play area
+    try {
+      if (typeof drawFloralBorder !== 'undefined') {
+        drawFloralBorder();
+      }
+    } catch (error) {
+      console.log("Error calling drawFloralBorder:", error);
+    }
+    
+    // Play area border removed for cleaner profile screen appearance
+    
+    // =============================================================================
+    // STATS SECTION (25% of screen height)
+    // =============================================================================
+    const statsHeight = playAreaHeight * 0.25;
+    const statsY = playAreaY;
+    
+    // Back button (top-left)
+    const backButtonSize = Math.max(playAreaWidth * 0.08, 30);
+    const backButtonX = playAreaX + backButtonSize / 2 + 10;
+    const backButtonY = statsY + 10 + backButtonSize / 2;
+    
+    // Check if back button is hovered
+    const backButtonHovered = dist(mouseX, mouseY, backButtonX, backButtonY) < backButtonSize / 2;
+    
+    // Draw back button
+    push();
+    fill(backButtonHovered ? COLORS.secondary : COLORS.primary);
+    noStroke(); // No outline to match Cook/Hint buttons
+    circle(backButtonX, backButtonY, backButtonSize);
+    
+    // Draw back arrow
+    fill('white');
+    noStroke();
+    textAlign(CENTER, CENTER);
+    textSize(backButtonSize * 0.4);
+    textFont('Helvetica, Arial, sans-serif'); // Sans serif font to match Cook/Hint buttons
+    textStyle(BOLD);
+    text("←", backButtonX, backButtonY);
+    pop();
+    
+    // Sign Out button (top-right)
+    const signOutButtonWidth = playAreaWidth * 0.2;
+    const signOutButtonHeight = backButtonSize * 0.8;
+    const signOutButtonX = playAreaX + playAreaWidth - signOutButtonWidth/2 - 10;
+    const signOutButtonY = statsY + 10 + signOutButtonHeight/2;
+    
+    // Check if sign out button is hovered
+    const signOutHovered = dist(mouseX, mouseY, signOutButtonX, signOutButtonY) < signOutButtonWidth/2;
+    
+    // Draw sign out button
+    push();
+    rectMode(CENTER);
+    fill(signOutHovered ? lerpColor(color(COLORS.secondary), color(255), 0.2) : COLORS.secondary); // Dark pink button to match game colors
+    noStroke(); // No outline to match Cook/Hint buttons
+    rect(signOutButtonX, signOutButtonY, signOutButtonWidth, signOutButtonHeight, 8);
+    
+    // Sign out button text
+    fill('white');
+    noStroke();
+      textAlign(CENTER, CENTER);
+    textSize(Math.max(signOutButtonHeight * 0.25, 10));
+    textFont('Helvetica, Arial, sans-serif'); // Sans serif font to match Cook/Hint buttons
+    textStyle(BOLD);
+    text("Sign Out", signOutButtonX, signOutButtonY);
+    pop();
+    
+    // "COMBO MEAL" title (enlarged for profile screen prominence)
+    const titleY = statsY + statsHeight * 0.4;
+    const titleText = "COMBO MEAL";
+    const titleSize = Math.max(playAreaWidth * 0.0825, 30); // Increased by 50% from 0.055 to 0.0825, min from 20 to 30
+    
+    push();
+    textAlign(CENTER, CENTER);
+    textSize(titleSize);
+    textStyle(BOLD);
+    textFont(titleFont); // Use Courier font like game screen
+    
+    // Calculate letter spacing for kerning effect
+    let titleX = playAreaX + playAreaWidth / 2;
+    let totalWidth = 0;
+    let letterWidths = [];
+    
+    // Calculate individual letter widths
+    for (let i = 0; i < titleText.length; i++) {
+      let letterWidth = textWidth(titleText[i]);
+      letterWidths.push(letterWidth);
+      totalWidth += letterWidth;
+    }
+    
+    // Add kerning (0% increase in spacing like game screen)
+    const kerningFactor = 0; // 0% extra space like game screen
+    let totalKerning = 0;
+    for (let i = 0; i < titleText.length - 1; i++) {
+      totalKerning += letterWidths[i] * kerningFactor;
+    }
+    
+    // Starting position
+    let x = titleX - (totalWidth + totalKerning) / 2;
+    
+    // Bubble Pop effect parameters (exact copy from game screen)
+    const bounceAmount = 2 * Math.sin(frameCount * 0.05); // Subtle bounce animation
+    
+    // Calculate outline sizes (scaled proportionally with larger title)
+    const outerSize = Math.max(titleSize * 0.1, 3);   // Scale with title size, min 3px
+    const middleSize = Math.max(titleSize * 0.067, 2);  // Scale with title size, min 2px  
+    const innerSize = Math.max(titleSize * 0.017, 0.5); // Scale with title size, min 0.5px
+    
+    // IMPROVED OUTLINE APPROACH - Draw outlines for each letter (exact copy from game screen)
+    // First pass: Draw all outline layers for all letters
+    for (let layer = 0; layer < 3; layer++) {
+      let currentX = x; // Reset x position for each layer
+      
+      let layerSize, layerColor;
+      switch (layer) {
+        case 0: // Outer black outline
+          layerSize = outerSize;
+          layerColor = 'black';
+          break;
+        case 1: // Middle peach outline
+          layerSize = middleSize;
+          layerColor = COLORS.peach;
+          break;
+        case 2: // Inner black outline
+          layerSize = innerSize;
+          layerColor = 'black';
+          break;
+      }
+      
+      push();
+      fill(layerColor);
+      textAlign(CENTER, CENTER);
+      textSize(titleSize);
+      
+      for (let i = 0; i < titleText.length; i++) {
+        // Calculate letter position with alternating bounce effect (exact copy from game screen)
+        let offsetY = (i % 2 === 0) ? bounceAmount : -bounceAmount;
+        let letterX = currentX + letterWidths[i]/2;
+        let letterY = titleY + offsetY;
+        
+        // Draw outline for this letter
+        for (let angle = 0; angle < TWO_PI; angle += PI/16) {
+          let outlineOffsetX = cos(angle) * layerSize;
+          let outlineOffsetY = sin(angle) * layerSize;
+          text(titleText[i], letterX + outlineOffsetX, letterY + outlineOffsetY);
+        }
+        
+        // Move to next letter position
+        currentX += letterWidths[i] * (1 + kerningFactor);
+      }
+      pop();
+    }
+    
+    // Second pass: Draw colored letters on top (exact copy from game screen)
+    for (let i = 0; i < titleText.length; i++) {
+      // Choose color based on position (exact copy from game screen)
+      let letterColor;
+      switch (i % 3) {
+        case 0:
+          letterColor = '#cfc23f'; // Mustard yellow from game screen
+          break;
+        case 1:
+          letterColor = '#f7dc30'; // Bright yellow from game screen
+          break;
+        case 2:
+          letterColor = COLORS.secondary; // Pink from game screen
+          break;
+      }
+      
+      // Calculate letter position with alternating bounce effect (exact copy from game screen)
+      let offsetY = (i % 2 === 0) ? bounceAmount : -bounceAmount;
+      let letterX = x + letterWidths[i]/2;
+      let letterY = titleY + offsetY;
+      
+      // Draw the colored letter
+      push();
+      textAlign(CENTER, CENTER);
+      textSize(titleSize);
+      fill(letterColor);
+      text(titleText[i], letterX, letterY);
+      pop();
+      
+      // Move to the next letter position with kerning
+      x += letterWidths[i] * (1 + kerningFactor);
+    }
+    pop();
+    
+    // Draw 4-card stats grid in lower part of stats section
+    const userId = window.authState?.user?.id;
+    if (userId && typeof getUserProfile === 'function') {
+      if (!window.profileData || window.profileData.loading) {
+        // Show loading state
+        textAlign(CENTER, CENTER);
+        textSize(Math.max(playAreaWidth * 0.04, 16));
+        textStyle(NORMAL);
+        fill(COLORS.text);
+        text("Loading your stats...", playAreaX + playAreaWidth / 2, statsY + statsHeight * 0.7);
+        
+        // Load profile data
+        if (!window.profileData) {
+          window.profileData = { loading: true };
+          window.recipeNamesCache = null;
+          window.recipeImagesCache = null;
+          window.loadingRecipeNames = false;
+          window.loadingRecipeImages = false;
+          
+          getUserProfile(userId).then(profile => {
+            if (profile) {
+          console.log("Profile loaded with unique recipes:", profile.unique_recipes?.length || 0);
+              window.profileData = profile;
+          
+          // Initialize lazy loading with first batch of recipes
+          allUniqueRecipes = profile.unique_recipes || [];
+          hasMoreRecipes = allUniqueRecipes.length >= recipesPerPage;
+          
+          // Note: Animation will be triggered when recipe names/images are loaded, not here
+            } else {
+              window.profileData = { error: true };
+            }
+          }).catch(error => {
+            console.error("Error loading profile:", error);
+            window.profileData = { error: true };
+          });
+        }
+      } else if (window.profileData.error) {
+        // Show error state
+        textAlign(CENTER, CENTER);
+        textSize(Math.max(playAreaWidth * 0.035, 14));
+        textStyle(NORMAL);
+        fill(COLORS.secondary);
+        text("Error loading stats", playAreaX + playAreaWidth / 2, statsY + statsHeight * 0.7);
+      } else {
+        // Draw 4-card stats grid
+        const cardHeight = statsHeight * 0.4;
+        const cardWidth = playAreaWidth * 0.18;
+        const cardSpacing = playAreaWidth * 0.04;
+        const totalCardsWidth = (cardWidth * 4) + (cardSpacing * 3);
+        const cardsStartX = playAreaX + (playAreaWidth - totalCardsWidth) / 2;
+        const cardsY = statsY + statsHeight * 0.55;
+        
+        const metrics = [
+          { 
+            label: "Current\nStreak", 
+            value: window.profileData.current_streak || 0,
+            x: cardsStartX 
+          },
+          { 
+            label: "Best\nStreak", 
+            value: window.profileData.longest_streak || 0,
+            x: cardsStartX + cardWidth + cardSpacing
+          },
+          { 
+            label: "Recipes\nMade", 
+            value: window.profileData.recipes_made || 0,
+            x: cardsStartX + (cardWidth + cardSpacing) * 2
+          },
+          { 
+            label: "Average\nScore", 
+            value: (window.profileData.average_star_score || 0).toFixed(1),
+            x: cardsStartX + (cardWidth + cardSpacing) * 3,
+            suffix: "⭐"
+          }
+        ];
+        
+        push();
+        rectMode(CORNER);
+        
+        metrics.forEach(metric => {
+          // Draw card background
+          fill(255); // Pure white background
+          stroke(COLORS.primary);
+          strokeWeight(1);
+          rect(metric.x, cardsY, cardWidth, cardHeight, 8);
+          
+          // Draw label
+          fill(COLORS.text);
+          noStroke();
+          textAlign(CENTER, TOP);
+          textSize(Math.max(cardWidth * 0.1, 10));
+          textStyle(NORMAL);
+          text(metric.label, metric.x + cardWidth/2, cardsY + cardHeight * 0.15);
+          
+          // Draw value
+          textAlign(CENTER, BOTTOM);
+          textSize(Math.max(cardWidth * 0.22, 16));
+          textStyle(BOLD);
+          fill(COLORS.primary);
+          const displayValue = metric.value + (metric.suffix || "");
+          text(displayValue, metric.x + cardWidth/2, cardsY + cardHeight * 0.85);
+        });
+        
+        pop();
+      }
+    }
+    
+    // =============================================================================
+    // RECIPE SECTION (75% of screen height)
+    // =============================================================================
+    const recipesY = statsY + statsHeight;
+    const recipesHeight = playAreaHeight * 0.75;
+    
+    // Recipe box (bottom third of recipe section)
+    const greenBoxHeight = recipesHeight * 0.33;
+    const greenBoxY = recipesY + recipesHeight - greenBoxHeight;
+    const greenBoxWidth = playAreaWidth * 0.95;
+    const greenBoxX = playAreaX + (playAreaWidth - greenBoxWidth) / 2;
+    
+    // Cards scroll area (top two-thirds of recipe section)
+    const cardScrollAreaHeight = recipesHeight - greenBoxHeight;
+    
+    // =============================================================================
+    // 3D RECIPE BOX CHARACTER (drawn behind Recipe CardTops)
+    // =============================================================================
+    
+    push();
+    rectMode(CORNER);
+    
+    // Calculate dimensions for 3D lid effect
+    const lidTopHeight = greenBoxHeight / 3; // Lid top is 1/3 of box height
+    const trapezoidHeight = greenBoxHeight * 0.4; // Trapezoid height for good proportion
+    const trapezoidBottomWidth = greenBoxWidth * 0.75; // Bottom is 75% of box width
+    const trapezoidTopWidth = greenBoxWidth; // Top matches box width
+    
+    // Calculate positions for each layer
+    const lidTopY = greenBoxY - lidTopHeight - trapezoidHeight;
+    const trapezoidY = greenBoxY - trapezoidHeight;
+    const trapezoidBottomX = greenBoxX + (greenBoxWidth - trapezoidBottomWidth) / 2; // Center the trapezoid bottom
+    
+    // LAYER 1: Base Recipe Box (bottom, right angles)
+    // Draw shadow for base box
+    fill(0, 0, 0, 40);
+    noStroke();
+    rect(greenBoxX + 4, greenBoxY + 4, greenBoxWidth, greenBoxHeight); // No rounded corners
+    
+    // Store orange recipe box coordinates to draw AFTER cards (so cards go behind it)
+    window.orangeRecipeBox = {
+      x: greenBoxX,
+      y: greenBoxY,
+      w: greenBoxWidth,
+      h: greenBoxHeight,
+      squareWidth: greenBoxWidth / 3,
+      squareHeight: greenBoxHeight / 2
+    };
+    
+    // =============================================================================
+    // CUTE RECIPE BOX FACE - APlasker
+    // =============================================================================
+    
+    // Store face coordinates to draw later with the box
+    window.recipeBoxFace = {
+      leftEyeX: greenBoxX + (greenBoxWidth / 3),
+      rightEyeX: greenBoxX + (greenBoxWidth / 3) * 2,
+      eyeY: greenBoxY + (greenBoxHeight / 2),
+      eyeSize: Math.min(greenBoxWidth / 3, greenBoxHeight / 2) * 0.22,
+      mouthX: greenBoxX + (greenBoxWidth / 3) * 1.5,
+      mouthY: greenBoxY + (greenBoxHeight / 2) * 1.5,
+      mouthWidth: (greenBoxWidth / 3) * 0.25,
+      mouthHeight: (greenBoxHeight / 2) * 0.15,
+      leftCheekX: greenBoxX + (greenBoxWidth / 3) * 0.5,
+      leftCheekY: greenBoxY + (greenBoxHeight / 2) * 1.5,
+      rightCheekX: greenBoxX + (greenBoxWidth / 3) * 2.5,
+      rightCheekY: greenBoxY + (greenBoxHeight / 2) * 1.5,
+      cheekFlowerSize: Math.min(greenBoxWidth / 3, greenBoxHeight / 2) * 0.12
+    };
+
+    // LAYER 2: Trapezoid Lid (middle, light green)
+    // Draw light green trapezoid lid (no shadow)
+    fill(COLORS.primary); // Light green color
+    stroke(0);
+    strokeWeight(3); // Increased from 2 for bolder outline
+    quad(
+      trapezoidBottomX, greenBoxY, // Bottom left (shares border with box top)
+      trapezoidBottomX + trapezoidBottomWidth, greenBoxY, // Bottom right
+      greenBoxX + greenBoxWidth, trapezoidY, // Top right
+      greenBoxX, trapezoidY // Top left
+    );
+    
+    // LAYER 3: Lid Top Rectangle (top, orange)
+    // Draw lid top shadow
+    fill(0, 0, 0, 40);
+    noStroke();
+    rect(greenBoxX + 4, lidTopY + 4, greenBoxWidth, lidTopHeight); // Shadow offset
+    
+    // Draw orange lid top (shares border with trapezoid top)
+    fill(COLORS.peach); // Same orange as recipe box
+    stroke(0);
+    strokeWeight(3); // Increased from 2 for bolder outline
+    rect(greenBoxX, lidTopY, greenBoxWidth, lidTopHeight);
+    
+    pop();
+    
+    // Handle recipe completions with simplified card design
+    if (window.profileData && !window.profileData.loading && !window.profileData.error) {
+        if (window.profileData.unique_recipes && window.profileData.unique_recipes.length > 0) {
+        
+        // Show loading state if either names or images are not loaded
+        if (!window.recipeNamesCache || !window.recipeImagesCache) {
+          // Initialize loading flags if they don't exist
+          if (typeof window.loadingRecipeNames === 'undefined') {
+            window.loadingRecipeNames = false;
+          }
+          if (typeof window.loadingRecipeImages === 'undefined') {
+            window.loadingRecipeImages = false;
+          }
+          
+          // Fetch recipe names if not cached and not currently loading
+          if (!window.recipeNamesCache && !window.loadingRecipeNames) {
+            console.log("Fetching recipe names for unique recipes...");
+            window.loadingRecipeNames = true;
+            const recipeIds = allUniqueRecipes.map(comp => comp.rec_id);
+            getRecipeNames(recipeIds).then(recipeMap => {
+              console.log("Recipe names fetched:", recipeMap);
+              window.recipeNamesCache = recipeMap;
+              window.loadingRecipeNames = false;
+              
+              // Check if both names and images are now loaded to trigger animation
+              if (window.recipeImagesCache && !profileDataLoaded) {
+                console.log("Both recipe names and images loaded - triggering bounce animation");
+                animations.push(new RecipeBounceAnimation());
+                profileDataLoaded = true;
+              }
+            }).catch(error => {
+              console.error("Error fetching recipe names:", error);
+            window.recipeNamesCache = {};
+              window.loadingRecipeNames = false;
+          });
+          }
+          
+          // Also fetch recipe images for modal display if not cached and not currently loading
+          if (!window.recipeImagesCache && !window.loadingRecipeImages) {
+            console.log("Fetching recipe images for unique recipes...");
+            window.loadingRecipeImages = true;
+            const recipeIds = allUniqueRecipes.map(comp => comp.rec_id);
+            getRecipeImages(recipeIds).then(imageMap => {
+              console.log("Recipe images fetched:", imageMap);
+              window.recipeImagesCache = imageMap;
+              window.loadingRecipeImages = false;
+              
+              // Check if both names and images are now loaded to trigger animation
+              if (window.recipeNamesCache && !profileDataLoaded) {
+                console.log("Both recipe names and images loaded - triggering bounce animation");
+                animations.push(new RecipeBounceAnimation());
+                profileDataLoaded = true;
+              }
+            }).catch(error => {
+              console.error("Error fetching recipe images:", error);
+              window.recipeImagesCache = {};
+              window.loadingRecipeImages = false;
+            });
+          }
+          
+          // Show loading state while either is loading
+          push();
+          textAlign(CENTER, CENTER);
+            textSize(Math.max(playAreaWidth * 0.035, 14));
+            textStyle(NORMAL);
+            fill(COLORS.text);
+          text("Loading recipe details...", playAreaX + playAreaWidth / 2, recipesY + cardScrollAreaHeight / 2);
+          pop();
+          } else {
+          // Display simplified recipe cards using lazy loaded data
+          const recipes = allUniqueRecipes;
+          
+          // Recipe CardTop dimensions - overlapping design (reduced by 2% to fit inside box)
+          const cardWidth = greenBoxWidth * 0.98;
+          const cardHeight = 80; // Fixed height for recipe card tops
+          const cardOverlap = cardHeight * 0.05; // 5% overlap
+          const cardX = greenBoxX + (greenBoxWidth - cardWidth) / 2; // Center the narrower cards
+          
+          // Initialize scroll position
+          if (typeof recipeListScrollY === 'undefined') {
+            recipeListScrollY = 0;
+          }
+          
+          // FIXED: Calculate scroll limits to allow proper stacking behavior
+          const totalContentHeight = recipes.length * (cardHeight - cardOverlap);
+          // Allow much more scrolling to enable stacking at the top
+          recipeListMaxScroll = totalContentHeight + cardScrollAreaHeight;
+          
+          // Constrain scroll position - negative values bring cards up
+          recipeListScrollY = constrain(recipeListScrollY, -recipeListMaxScroll, 0);
+          
+          // Apply momentum scrolling
+          if (!recipeListScrolling && Math.abs(recipeListVelocity) > 0.1) {
+            recipeListScrollY += recipeListVelocity;
+            recipeListVelocity *= recipeListFriction;
+            recipeListScrollY = constrain(recipeListScrollY, -recipeListMaxScroll, 0);
+          }
+          
+          // Check if we need to load more recipes (lazy loading)
+          // Trigger when user has scrolled near the bottom
+          const scrolledNearBottom = Math.abs(recipeListScrollY) > recipeListMaxScroll * 0.8;
+          if (scrolledNearBottom && hasMoreRecipes && !recipesLoading && window.profileData) {
+            loadMoreRecipes();
+          }
+          
+          // Store clickable cards for interaction
+          let clickableCards = [];
+          
+          // Draw recipe card tops in forward order so earlier cards go behind later cards when stacked
+          for (let recipeIndex = 0; recipeIndex < recipes.length; recipeIndex++) {
+            const completion = recipes[recipeIndex];
+          
+                        // Calculate base card position with scroll and overlap - cards start 12px ABOVE the recipe box
+            let baseCardY = greenBoxY - 12 + (recipeIndex * (cardHeight - cardOverlap)) - Math.abs(recipeListScrollY);
+            
+            // STACKING BEHAVIOR: Clamp cards that hit the top edge of viewing area
+            const topEdge = recipesY;
+            let cardY = Math.max(baseCardY, topEdge);
+            
+            // BOUNCE ANIMATION: Apply bounce offset to the first recipe card - APlasker
+            if (recipeIndex === 0) {
+              // Find active RecipeBounceAnimation
+              for (let anim of animations) {
+                if (anim instanceof RecipeBounceAnimation && anim.active) {
+                  cardY += anim.getBounceOffset();
+                  break;
+                }
+              }
+            }
+            
+            // RECIPE BOX BOUNDARY: Prevent last 5 cards from going too far above the recipe box
+            // This makes it look like the rest of the cards are still close to the box!
+            const cardsFromEnd = recipes.length - 1 - recipeIndex; // 0 = last card, 1 = second to last, etc.
+            const isInLastGroup = cardsFromEnd < 5; // Last 5 cards move together
+            
+            if (isInLastGroup) {
+              // Calculate where the absolute last card would be
+              const lastCardIndex = recipes.length - 1;
+              const lastCardBaseY = greenBoxY - 12 + (lastCardIndex * (cardHeight - cardOverlap)) - Math.abs(recipeListScrollY);
+              const lastCardY = Math.max(lastCardBaseY, topEdge);
+              
+              // Check if the last card would go too far above the recipe box
+              // We want the final position to be right at the recipe box edge when fully scrolled
+              const maxDistanceAboveBox = 0; // Keep cards at the recipe box edge when fully scrolled
+              const lastCardBottom = lastCardY + cardHeight;
+              if (lastCardBottom < greenBoxY - maxDistanceAboveBox) {
+                // Calculate the offset needed to keep last card's bottom at the ideal position
+                const boundaryOffset = (greenBoxY - maxDistanceAboveBox - cardHeight) - lastCardY;
+                
+                // Apply this same offset to the current card in the group
+                cardY += boundaryOffset;
+              }
+            }
+            
+            // Skip cards that are completely below the visible area
+            if (cardY > recipesY + cardScrollAreaHeight) {
+              continue;
+            }
+            
+            // Get recipe info with proper null checking
+            const recipeInfo = window.recipeNamesCache && window.recipeNamesCache[completion.rec_id] ? window.recipeNamesCache[completion.rec_id] : null;
+              const recipeName = recipeInfo?.name || `Recipe #${completion.rec_id.slice(0, 8)}`;
+              const dayNumber = recipeInfo?.day_number || '?';
+              
+            // Format completion date
+            const completionDate = new Date(completion.completed_at);
+            const completionDateStr = completionDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            
+            // Get recipe date from cache if available
+            const recipeDate = recipeInfo?.date || null;
+            let recipeDateStr = '';
+            if (recipeDate) {
+              const date = new Date(recipeDate);
+              recipeDateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            }
+            
+            // Since cards are now clamped to stay within viewing area, they're always fully visible
+            const visibleCardTop = cardY;
+            const visibleCardBottom = cardY + cardHeight;
+            const visibleHeight = cardHeight;
+            
+            // Add to clickable cards for interaction
+            clickableCards.push({
+              completion: completion,
+              recipeName: recipeName,
+              dayNumber: dayNumber,
+              completionDateStr: completionDateStr,
+              recipeDateStr: recipeDateStr,
+              starScore: completion.star_score || 0,
+              bounds: {
+                x: cardX,
+                y: visibleCardTop,
+                w: cardWidth,
+                h: visibleHeight
+              },
+              fullBounds: {
+                x: cardX,
+                y: cardY,
+                w: cardWidth,
+                h: cardHeight
+              }
+            });
+              
+                        // Draw card (now always fully visible due to stacking behavior)
+              push();
+              rectMode(CORNER);
+            
+            // Card background with shadow - rounded top, flat bottom (more rounded to match recipe cards)
+            fill(0, 0, 0, 30);
+            noStroke();
+            // Draw shadow with rounded top corners only - increased radius to match recipe cards
+            drawRoundedTopRect(cardX + 3, cardY + 3, cardWidth, cardHeight, Math.max(cardWidth * 0.02, 8));
+            
+                        fill(255, 255, 255, 255); // Changed to 100% opacity (was 240)
+                stroke(COLORS.primary);
+                strokeWeight(2);
+            // Draw card with rounded top corners only - increased radius to match recipe cards
+            drawRoundedTopRect(cardX, cardY, cardWidth, cardHeight, Math.max(cardWidth * 0.02, 8));
+              
+            // Draw flowers in the corners of the card tops (match recipe cards)
+            const flowerSize = Math.max(cardWidth * 0.01, 2); // 1% of card width, min 2px
+            const cornerOffset = cardWidth * 0.04; // 4% of card width from edges
+            
+            // Draw flowers in each corner (only top corners for card tops)
+            drawFlower(cardX + cornerOffset, cardY + cornerOffset, flowerSize, COLORS.primary); // Top-left
+            drawFlower(cardX + cardWidth - cornerOffset, cardY + cornerOffset, flowerSize, COLORS.peach); // Top-right
+            
+            // === RECIPE NAME (optimized sizing for CardTops) ===
+              textAlign(CENTER, CENTER);
+            const recipeNameSize = min(max(cardWidth * 0.08, 12), 18); // Optimized: 8% of card width, min 12px, max 18px
+            const maxTitleWidth = cardWidth * 0.9;
+            
+            textSize(recipeNameSize);
+            fill(COLORS.secondary); // Pink color like recipe cards
+              textStyle(BOLD);
+            textFont('Courier, "Courier New", monospace'); // Courier font like recipe cards
+            
+            let displayName = recipeName;
+            const titleWidth = textWidth(displayName);
+            
+            // Use scale factor for dynamic sizing
+            let scaleFactor = 1.0;
+            if (titleWidth > maxTitleWidth) {
+              scaleFactor = maxTitleWidth / titleWidth;
+              textSize(recipeNameSize * scaleFactor);
+            }
+            
+            text(displayName, cardX + cardWidth/2, cardY + cardHeight * 0.25);
+            textStyle(NORMAL);
+            
+            // === AUTHOR (optimized sizing for CardTops) ===
+            if (recipeInfo?.author) {
+              textAlign(CENTER, CENTER);
+              textSize(min(max(cardWidth * 0.04, 6), 8)); // Optimized: 4% of card width, min 6px, max 8px
+              fill('#333333'); // Match win screen color
+              textStyle(BOLD); // Match win screen style
+              textFont('Courier, "Courier New", monospace'); // Match win screen font (same as recipe name)
+              
+              let authorText = `By ${recipeInfo.author}`;
+              text(authorText, cardX + cardWidth/2, cardY + cardHeight * 0.45);
+              textStyle(NORMAL);
+            }
+                
+            // === DATE AND STARS (bottom row) ===
+            const bottomRowY = cardY + cardHeight * 0.75;
+            textFont('Helvetica, Arial, sans-serif'); // Standard font for date/stars
+            textStyle(NORMAL);
+            
+            // Recipe date (left side)
+            if (recipeDateStr) {
+              textAlign(LEFT, CENTER);
+              let dateTextSize = Math.max(cardWidth * 0.025, 10);
+              textSize(dateTextSize);
+              fill(120, 120, 120); // Gray color for date
+              
+              // Scale date text to fit left half
+              const maxDateWidth = cardWidth * 0.4;
+              while (textWidth(recipeDateStr) > maxDateWidth && dateTextSize > 8) {
+                dateTextSize *= 0.95;
+                textSize(dateTextSize);
+              }
+              
+              text(recipeDateStr, cardX + 15, bottomRowY);
+              }
+              
+            // Star rating (right side)
+            textAlign(RIGHT, CENTER);
+            let starTextSize = Math.max(cardWidth * 0.025, 10);
+            textSize(starTextSize);
+            fill(255, 215, 0); // Gold color for stars
+            
+            const starScore = completion.star_score || 0;
+            const starsText = "⭐".repeat(Math.max(0, starScore));
+            
+            // Scale star text to fit right half
+            const maxStarWidth = cardWidth * 0.4;
+            while (textWidth(starsText) > maxStarWidth && starTextSize > 8) {
+              starTextSize *= 0.95;
+              textSize(starTextSize);
+            }
+            
+            text(starsText, cardX + cardWidth - 15, bottomRowY);
+            
+            pop(); // End card drawing
+          }
+          
+          // Store clickable cards globally for interaction
+          window.clickableRecipeCards = clickableCards;
+          
+          // Show loading indicator if loading more recipes
+          if (recipesLoading) {
+            push();
+                textAlign(CENTER, CENTER);
+            textSize(Math.max(playAreaWidth * 0.03, 12));
+              textStyle(NORMAL);
+            fill(COLORS.primary);
+            text("Loading more recipes...", playAreaX + playAreaWidth / 2, recipesY + cardScrollAreaHeight - 30);
+              pop();
+          }
+          
+          // Draw recipe box top line over the cards so it's not cut off
+          if (window.recipeBoxTopLine) {
+              push();
+              stroke(0);
+            strokeWeight(3); // Same as recipe box outline
+            line(window.recipeBoxTopLine.x1, window.recipeBoxTopLine.y1, 
+                 window.recipeBoxTopLine.x2, window.recipeBoxTopLine.y2);
+              pop();
+          }
+        }
+                } else {
+        // No completed recipes - show message
+              push();
+                textAlign(CENTER, CENTER);
+        textSize(Math.max(playAreaWidth * 0.04, 16));
+              textStyle(NORMAL);
+        fill(COLORS.text);
+        text("Complete recipes to fill your box!", playAreaX + playAreaWidth / 2, recipesY + cardScrollAreaHeight / 2);
+              pop();
+      }
+    }
+    
+    // =============================================================================
+    // DRAW ORANGE RECIPE BOX AFTER CARDS (so cards appear behind it) - APlasker
+    // =============================================================================
+    if (window.orangeRecipeBox) {
+              push();
+      rectMode(CORNER);
+      
+      // Draw main orange recipe box base (right angles, no rounded corners)
+      fill(COLORS.peach); // Use peach/orange color for recipe box
+              stroke(0);
+      strokeWeight(3); // Increased from 2 for bolder outline
+      rect(window.orangeRecipeBox.x, window.orangeRecipeBox.y, window.orangeRecipeBox.w, window.orangeRecipeBox.h); // No rounded corners
+      
+      // Draw the cute recipe box face if face data exists
+      if (window.recipeBoxFace) {
+        const face = window.recipeBoxFace;
+              
+        // Draw eyes (medium circles)
+        fill('black');
+        noStroke();
+        circle(face.leftEyeX, face.eyeY, face.eyeSize);
+        circle(face.rightEyeX, face.eyeY, face.eyeSize);
+        
+        // Draw cute teacup-style smile (smooth bezier curve for natural appearance)
+        strokeWeight(Math.max(5, face.mouthWidth * 0.2)); // Extra thick stroke weight
+        strokeCap(ROUND); // Round line caps for smoother appearance
+        stroke('black');
+        noFill();
+        
+        // Use bezier curve for smooth, gradual smile instead of simple arc
+        const smileStartX = face.mouthX - face.mouthWidth/2;
+        const smileEndX = face.mouthX + face.mouthWidth/2;
+        const smileY = face.mouthY - face.mouthHeight/4; // Adjust Y position for bezier curve
+        const controlYOffset = face.mouthHeight * 0.6; // Control point offset for smooth curve
+        
+        bezier(
+          smileStartX, smileY, // Start point
+          smileStartX + face.mouthWidth * 0.2, smileY + controlYOffset, // First control point (gentle curve)
+          smileEndX - face.mouthWidth * 0.2, smileY + controlYOffset, // Second control point (gentle curve) 
+          smileEndX, smileY // End point
+        );
+        
+        // Draw rosy cheeks with floral pattern (bottom left and bottom right)
+        drawFlower(face.leftCheekX, face.leftCheekY, face.cheekFlowerSize, COLORS.secondary); // Pink floral pattern
+        drawFlower(face.rightCheekX, face.rightCheekY, face.cheekFlowerSize, COLORS.secondary); // Pink floral pattern
+      }
+      
+              pop();
+    }
+    
+    // =============================================================================
+    // RECIPE BOX TABS - Yellow index card tabs (drawn in front of cards) - APlasker
+    // =============================================================================
+    
+    // Tab dimensions
+    const tabWidth = greenBoxWidth / 6; // 1/6th as wide as recipe box
+    const tabHeight = greenBoxHeight / 8; // 1/8th as tall as recipe box
+    const tabY = greenBoxY - tabHeight; // Bottom of tab shares border with top of box
+    const tabCornerRadius = Math.max(tabWidth * 0.15, 5); // Rounded top corners
+    
+    // First tab - starts 10% from left side
+    const tab1X = greenBoxX + (greenBoxWidth * 0.1);
+    
+    // Second tab - starts 25% from left side  
+    const tab2X = greenBoxX + (greenBoxWidth * 0.25);
+            
+    // Draw tab shadows
+            push();
+            fill(0, 0, 0, 30);
+            noStroke();
+    drawRoundedTopRect(tab1X + 2, tabY + 2, tabWidth, tabHeight, tabCornerRadius); // Tab 1 shadow
+    drawRoundedTopRect(tab2X + 2, tabY + 2, tabWidth, tabHeight, tabCornerRadius); // Tab 2 shadow
+    
+    // Draw yellow tabs with rounded top corners
+    fill('#f7dc30'); // Bright yellow color (same as COMBO MEAL title)
+    stroke(0);
+    strokeWeight(3); // Increased from 2 for bolder outline
+    drawRoundedTopRect(tab1X, tabY, tabWidth, tabHeight, tabCornerRadius); // Tab 1
+    drawRoundedTopRect(tab2X, tabY, tabWidth, tabHeight, tabCornerRadius); // Tab 2
+            pop();
+    
+
+    
+    // =============================================================================
+    // RECIPE CARD MODAL - APlasker - UPDATED to be exact replica of win screen recipe card
+    // =============================================================================
+    if (recipeModalActive || recipeModalAnimating) {
+      // Handle modal opacity animation
+      if (recipeModalAnimating) {
+        if (recipeModalActive) {
+          // Fade in
+          recipeModalOpacity += 51; // Fast fade in
+          if (recipeModalOpacity >= 255) {
+            recipeModalOpacity = 255;
+            recipeModalAnimating = false;
+          }
+        } else {
+          // Fade out
+          recipeModalOpacity -= 51; // Fast fade out
+          if (recipeModalOpacity <= 0) {
+            recipeModalOpacity = 0;
+            recipeModalAnimating = false;
+            selectedRecipeCard = null; // Clear selected card data
+            window.selectedRecipeFullData = null; // Clear full recipe data
+          }
+        }
+      }
+      
+      if (recipeModalOpacity > 0 && selectedRecipeCard) {
+        // Draw modal overlay
+        push();
+        fill(0, 0, 0, recipeModalOpacity * 0.6); // Semi-transparent overlay
+        noStroke();
+        rect(0, 0, windowWidth, windowHeight);
+        pop();
+        
+        // Calculate recipe card size to match win screen exactly
+        const cardWidth = min(playAreaWidth * 0.95, 600); // Match win screen: min(playAreaWidth, 600) but allow 95% of play area
+        const cardHeight = playAreaHeight * 0.45; // Match win screen: playAreaHeight * 0.45
+        
+        // Position card slightly above center for better visual balance
+        const cardX = playAreaX + playAreaWidth / 2;
+        const cardY = playAreaY + playAreaHeight * 0.4; // Raised from 50% to 40% from top
+        
+        // Draw modal content - just the recipe card itself (no modal background container)
+        if (recipeModalOpacity > 200) { // Only show content when mostly opaque
+          
+          // Fetch full recipe data if not already loaded
+          if (!window.selectedRecipeFullData && selectedRecipeCard.completion) {
+            console.log("Fetching full recipe data for rec_id:", selectedRecipeCard.completion.rec_id);
+            
+            // Initialize loading state
+            window.selectedRecipeFullData = { loading: true };
+            
+            // Fetch the full recipe details
+            fetchRecipeByRecId(selectedRecipeCard.completion.rec_id).then(fullRecipeData => {
+              if (fullRecipeData) {
+                console.log("Full recipe data loaded:", fullRecipeData);
+                window.selectedRecipeFullData = fullRecipeData;
+              } else {
+                console.error("Failed to load recipe data");
+                window.selectedRecipeFullData = { error: true };
+              }
+            }).catch(error => {
+              console.error("Error loading recipe data:", error);
+              window.selectedRecipeFullData = { error: true };
+            });
+          }
+          
+          push();
+          
+          if (window.selectedRecipeFullData && window.selectedRecipeFullData.loading) {
+            // Show loading state on the card
+            // Draw card background for loading state
+            push();
+            rectMode(CENTER);
+            fill(255, 255, 255, recipeModalOpacity);
+            stroke(COLORS.primary);
+            strokeWeight(2);
+            rect(cardX, cardY, cardWidth, cardHeight, max(cardWidth * 0.02, 8));
+            pop();
+            
+            textAlign(CENTER, CENTER);
+            textSize(Math.max(cardWidth * 0.04, 16));
+            textStyle(NORMAL);
+            fill(COLORS.text);
+            text("Loading recipe details...", cardX, cardY);
+            
+          } else if (window.selectedRecipeFullData && window.selectedRecipeFullData.error) {
+            // Show error state on the card
+            // Draw card background for error state
+            push();
+            rectMode(CENTER);
+            fill(255, 255, 255, recipeModalOpacity);
+            stroke(COLORS.primary);
+            strokeWeight(2);
+            rect(cardX, cardY, cardWidth, cardHeight, max(cardWidth * 0.02, 8));
+            pop();
+            
+            textAlign(CENTER, CENTER);
+            textSize(Math.max(cardWidth * 0.035, 14));
+            textStyle(NORMAL);
+            fill(COLORS.secondary);
+            text("Error loading recipe details", cardX, cardY);
+            
+          } else if (window.selectedRecipeFullData && !window.selectedRecipeFullData.loading) {
+            // Draw the complete recipe card - exact replica of win screen
+            const recipeData = window.selectedRecipeFullData;
+            
+            // === RECIPE CARD (Direct replica of win screen, no container) ===
+            
+            // Draw Recipe Card with drop shadow (exactly like win screen)
+            push();
+            rectMode(CENTER);
+            fill(0, 0, 0, 30);
+            noStroke();
+            rect(cardX + 5, cardY + 5, cardWidth, cardHeight, max(cardWidth * 0.02, 8));
+            
+            // Card background (exactly like win screen)
+            fill(255);
+            stroke(220);
+            strokeWeight(1);
+            rect(cardX, cardY, cardWidth, cardHeight, max(cardWidth * 0.02, 8));
+            pop();
+            
+            // Draw flowers in the corners of the recipe card (exactly like win screen)
+            const flowerSize = max(cardWidth * 0.01, 2);
+            const cornerOffset = cardWidth * 0.04;
+            
+            drawFlower(cardX - cardWidth/2 + cornerOffset, cardY - cardHeight/2 + cornerOffset, flowerSize, COLORS.primary);
+            drawFlower(cardX + cardWidth/2 - cornerOffset, cardY - cardHeight/2 + cornerOffset, flowerSize, COLORS.peach);
+            drawFlower(cardX - cardWidth/2 + cornerOffset, cardY + cardHeight/2 - cornerOffset, flowerSize, COLORS.peach);
+            drawFlower(cardX + cardWidth/2 - cornerOffset, cardY + cardHeight/2 - cornerOffset, flowerSize, COLORS.primary);
+            
+            // === RECIPE NAME (adjusted for 5:4 ratio) ===
+            textAlign(CENTER, CENTER);
+            const recipeNameSize = min(max(cardWidth * 0.08, 16), 28); // Size relative to card width
+            const maxTitleWidth = cardWidth * 0.9;
+            
+            textSize(recipeNameSize);
+            fill(COLORS.secondary);
+            textStyle(BOLD);
+            
+            const recipeName = recipeData.recipeName || selectedRecipeCard.recipeName;
+            const titleWidth = textWidth(recipeName);
+            
+            let scaleFactor = 1.0;
+            if (titleWidth > maxTitleWidth) {
+              scaleFactor = maxTitleWidth / titleWidth;
+              textSize(recipeNameSize * scaleFactor);
+            }
+            
+            text(recipeName, cardX, cardY - cardHeight/2 + cardHeight * 0.12); // Adjusted position
+            textStyle(NORMAL);
+            
+            // === AUTHOR (adjusted for 5:4 ratio) ===
+            textAlign(CENTER, CENTER);
+            if (recipeData.author && recipeData.author.trim() !== "") {
+              // Use original sizing rule but ensure recipe name is always larger
+              const originalAuthorSize = min(max(cardWidth * 0.04, 8), 10); // Updated rule: 4% of card width, min 8px, max 10px
+              const actualRecipeNameSize = min(max(cardWidth * 0.08, 16), 28);
+              const scaledRecipeNameSize = scaleFactor < 1.0 ? actualRecipeNameSize * scaleFactor : actualRecipeNameSize;
+              
+              // Ensure recipe name is at least 2px larger than author (safeguard for edge cases)
+              const authorSize = min(originalAuthorSize, scaledRecipeNameSize - 2);
+              const finalAuthorSize = max(authorSize, 8); // Minimum 8px
+              
+              textSize(finalAuthorSize);
+              fill('#333333');
+              textStyle(BOLD);
+              text(`By ${recipeData.author}`, cardX, cardY - cardHeight/2 + cardHeight * 0.20); // Adjusted position
+              textStyle(NORMAL);
+            }
+            
+            // === RECIPE IMAGE (reduced by 10% from win screen) ===
+            const imageWidth = cardWidth * 0.54; // Reduced from 60% to 54% (10% smaller)
+            const imageHeight = imageWidth; // Keep square
+            let imageX = cardX - cardWidth/2 + cardWidth * 0.35; // Match win screen: 35% from left edge
+            let imageY = cardY - cardHeight/2 + cardHeight * 0.62; // Lowered from 56% to 62% from top
+            
+            push();
+            rectMode(CENTER);
+            imageMode(CENTER);
+            textAlign(CENTER, CENTER);
+            
+            // Check if we have the loaded image from cache
+            const recipeImageInfo = window.recipeImagesCache?.[selectedRecipeCard.completion.rec_id];
+            const hasLoadedImage = recipeImageInfo && recipeImageInfo.loadedImage;
+            
+            if (!hasLoadedImage || !recipeImageInfo.loadedImage) {
+              // Draw recipe image placeholder (exactly like win screen)
+              fill(240);
+              stroke(220);
+              strokeWeight(1);
+              rect(imageX, imageY, imageWidth, imageHeight, max(cardWidth * 0.02, 8));
+              
+              fill(180);
+              textSize(min(max(playAreaWidth * 0.025, 10), 14));
+              text("Recipe Image", imageX, imageY);
+            } else {
+              // Draw the actual recipe image (exactly like win screen)
+              const img = recipeImageInfo.loadedImage;
+              const imgRatio = img.width / img.height;
+              const boxRatio = imageWidth / imageHeight;
+              
+              let sx = 0, sy = 0, sw = img.width, sh = img.height;
+              
+              if (imgRatio > boxRatio) {
+                sw = img.height * boxRatio;
+                sx = (img.width - sw) / 2;
+              } else if (imgRatio < boxRatio) {
+                sh = img.width / boxRatio;
+                sy = (img.height - sh) / 2;
+              }
+              
+              const cornerRadius = max(cardWidth * 0.02, 8);
+              
+              push();
+              noStroke();
+              fill(255);
+              rect(imageX, imageY, imageWidth, imageHeight, cornerRadius);
+              drawingContext.clip();
+              
+              image(img, imageX, imageY, imageWidth, imageHeight, sx, sy, sw, sh);
+              
+              pop();
+              
+              noFill();
+              stroke(220);
+              strokeWeight(1);
+              rect(imageX, imageY, imageWidth, imageHeight, cornerRadius);
+            }
+            
+            pop();
+            
+            // === RECIPE DESCRIPTION (match win screen exactly) ===
+            const descriptionX = cardX - cardWidth/2 + cardWidth * 0.67; // Match win screen: 67% from left
+            const descriptionWidth = cardWidth * 0.3; // Match win screen: 30% of card width
+            const descriptionY = cardY - cardHeight/2 + cardHeight * 0.25; // Match win screen: 25% from top
+            
+            push();
+            fill('#666');
+            textAlign(LEFT, TOP);
+            textSize(min(max(playAreaWidth * 0.03, 10), 12)); // Updated: 3% of play area width, min 10px, max 12px
+            
+            const maxDescriptionHeight = cardHeight * 0.60; // Match win screen: 60% of card height
+            const description = recipeData.description || "A delicious recipe from your collection!";
+            
+            text(description, descriptionX, descriptionY, descriptionWidth, maxDescriptionHeight);
+            pop();
+            
+            // === "VIEW FULL RECIPE" LINK (match win screen exactly) ===
+            const recipeDetailsX = cardX - cardWidth/2 + cardWidth * 0.67; // Match win screen: 67% from left
+            const recipeDetailsY = cardY + cardHeight/2 - cardHeight * 0.15; // Match win screen: 15% from bottom
+            
+            // Check if mouse is over the recipe details link
+            const linkHovered = mouseX > recipeDetailsX && mouseX < recipeDetailsX + descriptionWidth &&
+                                mouseY > recipeDetailsY - 10 && mouseY < recipeDetailsY + 20;
+            
+            push();
+            textAlign(LEFT, CENTER);
+            textSize(min(max(playAreaWidth * 0.035, 12), 14)); // Updated: 3.5% of play area width, min 12px, max 14px
+            textStyle(BOLD);
+            fill(linkHovered ? COLORS.primary : '#666');
+            text("Make this recipe for real! →", recipeDetailsX, recipeDetailsY, descriptionWidth);
+            textStyle(NORMAL);
+            pop();
+            
+            // Store button data for click handling
+            window.recipeModalButtons = {
+              fullRecipe: {
+                x: recipeDetailsX + descriptionWidth/2, 
+                y: recipeDetailsY, 
+                w: descriptionWidth, 
+                h: 30,
+                url: recipeData.recipeUrl || "https://www.example.com/recipe"
+              }
+              // Close button removed - modal can be closed by tapping outside
+            };
+            
+            // === STATS SECTION BELOW RECIPE CARD ===
+            const statsY = cardY + cardHeight/2 + 30; // 30px gap below recipe card
+            const statsHeight = 45; // Reduced height since no headers
+            
+            // Determine if Easter egg was found from completion data
+            const eggFound = selectedRecipeCard.completion?.egg_found || false;
+            
+            // Calculate grid dimensions based on whether egg was found
+            const numStats = eggFound ? 4 : 3; // 4 stats if egg found, 3 otherwise
+            const statCardWidth = cardWidth / numStats - 10; // Divide width evenly with 10px spacing
+            const statCardHeight = statsHeight;
+            
+            // Draw stats grid
+            push();
+            rectMode(CORNER);
+            
+            const hintsUsed = selectedRecipeCard.completion?.hints_used || 0;
+            const starCount = Math.max(0, selectedRecipeCard.starScore);
+            
+            const stats = [
+              {
+                value: "⭐".repeat(starCount),
+                color: "#FFD700"
+              },
+              {
+                value: formatTime(selectedRecipeCard.completion?.total_time_seconds || 0),
+                color: COLORS.primary
+              },
+              {
+                value: `${hintsUsed} Hint${hintsUsed === 1 ? '' : 's'}`,
+                color: COLORS.secondary
+              }
+            ];
+            
+            // Only add egg stat if egg was found
+            if (eggFound) {
+              stats.push({
+                value: "🍳🥚", // Egg-in-pan emoji
+                color: "#FFA500"
+              });
+            }
+            
+            // Draw each stat card
+            for (let i = 0; i < stats.length; i++) {
+              const stat = stats[i];
+              const statX = cardX - cardWidth/2 + i * (statCardWidth + 10) + 5; // 5px left margin
+              
+              // Draw stat card background - white instead of grey
+              fill(255); // Pure white background
+              stroke(stat.color);
+              strokeWeight(2);
+              rect(statX, statsY, statCardWidth, statCardHeight, 8);
+              
+              // Draw value centered in the card
+              fill(stat.color);
+              noStroke();
+              textAlign(CENTER, CENTER);
+              
+              // Adjust text size for stars to ensure they fit
+              if (i === 0) { // Stars
+                let starTextSize = Math.max(statCardWidth * 0.15, 12);
+                textSize(starTextSize);
+                // Check if stars fit, reduce size if needed
+                while (textWidth(stat.value) > statCardWidth - 10 && starTextSize > 8) {
+                  starTextSize *= 0.9;
+                  textSize(starTextSize);
+                }
+              } else {
+                textSize(Math.max(statCardWidth * 0.18, 14));
+              }
+              
+              textStyle(BOLD);
+              text(stat.value, statX + statCardWidth/2, statsY + statCardHeight/2);
+            }
+            
+            pop();
+            
+            if (linkHovered) {
+              cursor(HAND);
+            }
+          }
+          
+          pop();
+        }
+      }
+    }
+    
+    // =============================================================================
+    // SIGN OUT CONFIRMATION MODAL - APlasker
+    // =============================================================================
+    if (signOutModalActive || signOutModalAnimating) {
+      // Handle modal opacity animation - FIXED: Faster animation
+      if (signOutModalAnimating) {
+        if (signOutModalActive) {
+          // Fade in - much faster
+          signOutModalOpacity += 51; // Increased from 15 to 51 for faster fade in (5 frames instead of 17)
+          if (signOutModalOpacity >= 255) {
+            signOutModalOpacity = 255;
+            signOutModalAnimating = false;
+          }
+        } else {
+          // Fade out - much faster
+          signOutModalOpacity -= 51; // Increased from 15 to 51 for faster fade out
+          if (signOutModalOpacity <= 0) {
+            signOutModalOpacity = 0;
+            signOutModalAnimating = false;
+            // Modal is now fully hidden
+          }
+        }
+      }
+      
+      if (signOutModalOpacity > 0) {
+        // Draw modal overlay
+    push();
+        fill(0, 0, 0, signOutModalOpacity * 0.5); // Semi-transparent overlay
+        noStroke();
+        rect(0, 0, windowWidth, windowHeight);
+        pop();
+        
+        // Draw modal box
+        const modalWidth = Math.min(playAreaWidth * 0.8, 300);
+        const modalHeight = Math.min(playAreaHeight * 0.4, 200);
+        const modalX = playAreaX + playAreaWidth / 2;
+        const modalY = playAreaY + playAreaHeight / 2;
+        
+        push();
+        rectMode(CENTER);
+        fill(255, 255, 255, signOutModalOpacity);
+        stroke(COLORS.primary);
+    strokeWeight(2);
+        rect(modalX, modalY, modalWidth, modalHeight, 12);
+        pop();
+        
+        // Draw modal content
+        if (signOutModalOpacity > 200) { // Only show text when mostly opaque
+          push();
+          
+          // Title - Updated text and improved spacing
+          textAlign(CENTER, CENTER);
+          textSize(Math.max(modalWidth * 0.06, 14));
+          textStyle(BOLD);
+          fill(COLORS.text);
+          text("Sign Out?", modalX, modalY - modalHeight * 0.3); // More space from top
+          
+          // User email - Better vertical spacing
+          textSize(Math.max(modalWidth * 0.045, 12));
+          textStyle(NORMAL);
+          fill(COLORS.text);
+          const userEmail = window.authState?.user?.email || "Current User";
+          text(`Currently signed in as:`, modalX, modalY - modalHeight * 0.1); // More even spacing
+          text(userEmail, modalX, modalY + modalHeight * 0.05); // Keep same position
+          
+          // Improved button positioning with better spacing
+          const buttonWidth = modalWidth * 0.3;
+          const buttonHeight = 35;
+          const buttonY = modalY + modalHeight * 0.3; // Moved down for more even spacing
+          const buttonSpacing = modalWidth * 0.25;
+          
+          // Cancel button - Use standard secondary button styling
+          const cancelX = modalX - buttonSpacing;
+          const cancelHovered = dist(mouseX, mouseY, cancelX, buttonY) < buttonWidth/2;
+          
+          rectMode(CENTER);
+          fill(cancelHovered ? lerpColor(color(255), color(COLORS.primary), 0.1) : 255);
+          stroke(COLORS.primary); // Standard secondary button stroke
+          strokeWeight(3); // Standardized stroke weight
+          rect(cancelX, buttonY, buttonWidth, buttonHeight, 8);
+          
+              fill(COLORS.primary); // Standard secondary button text color
+          noStroke();
+          textAlign(CENTER, CENTER);
+          textSize(Math.max(buttonHeight * 0.25, 12));
+          textStyle(BOLD);
+          text("Cancel", cancelX, buttonY);
+          
+          // Sign Out button - Using same pink as Sign Out button
+          const confirmX = modalX + buttonSpacing;
+          const confirmHovered = dist(mouseX, mouseY, confirmX, buttonY) < buttonWidth/2;
+          
+          fill(confirmHovered ? lerpColor(color(COLORS.secondary), color(255), 0.2) : COLORS.secondary);
+          stroke(COLORS.secondary); // Match stroke to fill color for consistency
+          strokeWeight(3); // Standardized stroke weight
+          rect(confirmX, buttonY, buttonWidth, buttonHeight, 8);
+          
+          fill('white');
+          noStroke();
+          textAlign(CENTER, CENTER);
+          textSize(Math.max(buttonHeight * 0.25, 12));
+          textStyle(BOLD);
+          text("Sign Out", confirmX, buttonY);
+          
+    pop();
+        }
+      }
+    }
+    
+    // Handle cursor changes
+    if (backButtonHovered || signOutHovered) {
+      cursor(HAND);
+    } else if (signOutModalActive && signOutModalOpacity > 200) {
+      // Check modal button hovers - Updated coordinates for new spacing
+      const modalWidth = Math.min(playAreaWidth * 0.8, 300);
+      const modalHeight = Math.min(playAreaHeight * 0.4, 200);
+      const modalX = playAreaX + playAreaWidth / 2;
+      const modalY = playAreaY + playAreaHeight / 2;
+      const buttonWidth = modalWidth * 0.3;
+      const buttonY = modalY + modalHeight * 0.3; // Updated to match new button position
+      const buttonSpacing = modalWidth * 0.25;
+      
+      const cancelX = modalX - buttonSpacing; // Updated positioning
+      const confirmX = modalX + buttonSpacing; // Updated positioning
+      
+      if (dist(mouseX, mouseY, cancelX, buttonY) < buttonWidth/2 || 
+          dist(mouseX, mouseY, confirmX, buttonY) < buttonWidth/2) {
+      cursor(HAND);
+      } else {
+        cursor(ARROW);
+      }
+    } else {
+      cursor(ARROW);
+    }
+  }
+  
+  // Profile screen state variables for scrolling - APlasker
+  let recipeListScrollY = 0; // Current scroll position
+  let recipeListMaxScroll = 0; // Maximum scroll distance
+  let recipeListScrolling = false; // Whether user is actively scrolling
+  let recipeListTouchStartY = 0; // Touch start position for scrolling
+  let recipeListVelocity = 0; // Scroll velocity for momentum
+  let recipeListFriction = 0.9; // Friction for momentum decay
+  let recipeListTotalScrollDistance = 0; // Track total scroll distance for tap/scroll detection
+  let profileDataLoaded = false; // Track if profile data has finished loading for the first time - APlasker
+  
+  // Lazy loading state variables - APlasker
+  let allUniqueRecipes = []; // All loaded unique recipes
+  let recipesLoading = false; // Whether we're currently loading more recipes
+  let hasMoreRecipes = true; // Whether there are more recipes to load
+  let recipesPerPage = 20; // How many recipes to load at once
+  
+  // Sign out modal state variables - APlasker
+  let signOutModalActive = false;
+  let signOutModalOpacity = 0;
+  let signOutModalAnimating = false;
+  let signOutModalButtons = { cancel: null, confirm: null };
+  
+  // Function to show sign out confirmation modal - APlasker
+  function showSignOutModal() {
+    signOutModalActive = true;
+    signOutModalAnimating = true;
+    signOutModalOpacity = 0;
+    
+    // Create modal buttons
+    const modalWidth = Math.min(playAreaWidth * 0.8, 300);
+    const modalHeight = Math.min(playAreaHeight * 0.4, 200);
+    const modalX = playAreaX + playAreaWidth / 2;
+    const modalY = playAreaY + playAreaHeight / 2;
+    
+    const buttonWidth = modalWidth * 0.35;
+    const buttonHeight = 40;
+    const buttonY = modalY + modalHeight * 0.15;
+    
+    signOutModalButtons.cancel = {
+      x: modalX - modalWidth * 0.15,
+      y: buttonY,
+      w: buttonWidth,
+      h: buttonHeight,
+      label: "Cancel"
+    };
+    
+    signOutModalButtons.confirm = {
+      x: modalX + modalWidth * 0.15,
+      y: buttonY,
+      w: buttonWidth,
+      h: buttonHeight,
+      label: "Sign Out"
+    };
+  }
+  
+  // Function to hide sign out modal - APlasker
+  function hideSignOutModal() {
+    signOutModalActive = false; // Immediately set to false so fade out works
+    signOutModalAnimating = true;
+    // Modal will be fully hidden when opacity reaches 0
+  }
+  
+  // Recipe modal state variables - APlasker
+  let recipeModalActive = false;
+  let recipeModalOpacity = 0;
+  let recipeModalAnimating = false;
+  let selectedRecipeCard = null; // Stores the recipe data for the selected card
+  
+  // Function to show recipe card modal - APlasker
+  function showRecipeCardModal(recipeData) {
+    selectedRecipeCard = recipeData;
+    recipeModalActive = true;
+    recipeModalAnimating = true;
+    recipeModalOpacity = 0;
+  }
+  
+  // Function to hide recipe card modal - APlasker
+  function hideRecipeCardModal() {
+    recipeModalActive = false;
+    recipeModalAnimating = true;
+    // Modal will fade out and be fully hidden when opacity reaches 0
+  }
+  
+  // Function to load more recipes for lazy loading - APlasker
+  async function loadMoreRecipes() {
+    if (recipesLoading || !hasMoreRecipes || !window.authState?.user?.id) {
+      return;
+    }
+    
+    console.log("Loading more recipes...");
+    recipesLoading = true;
+    
+    try {
+      const userId = window.authState.user.id;
+      const currentCount = allUniqueRecipes.length;
+      
+      // Load more recipes from the current offset
+      const moreRecipes = await loadMoreUniqueRecipes(userId, currentCount, recipesPerPage);
+      
+      if (moreRecipes && moreRecipes.length > 0) {
+        // Add new recipes to our collection
+        allUniqueRecipes.push(...moreRecipes);
+        
+        // Update names and images caches for new recipes
+        const newRecipeIds = moreRecipes.map(comp => comp.rec_id);
+        
+        // Load recipe names for new recipes
+        const [newRecipeNames, newRecipeImages] = await Promise.all([
+          getRecipeNames(newRecipeIds),
+          getRecipeImages(newRecipeIds)
+        ]);
+        
+        // Merge with existing caches
+        if (newRecipeNames) {
+          window.recipeNamesCache = { ...window.recipeNamesCache, ...newRecipeNames };
+        }
+        if (newRecipeImages) {
+          window.recipeImagesCache = { ...window.recipeImagesCache, ...newRecipeImages };
+        }
+        
+        // Check if we have more recipes to load
+        hasMoreRecipes = moreRecipes.length >= recipesPerPage;
+        
+        console.log(`Loaded ${moreRecipes.length} more recipes. Total: ${allUniqueRecipes.length}, Has more: ${hasMoreRecipes}`);
+      } else {
+        // No more recipes to load
+        hasMoreRecipes = false;
+        console.log("No more recipes to load");
+      }
+    } catch (error) {
+      console.error("Error loading more recipes:", error);
+    } finally {
+      recipesLoading = false;
+    }
+  }
+
+  // Helper function to draw rectangle with only top corners rounded
+  function drawRoundedTopRect(x, y, w, h, radius) {
+    push();
+    beginShape();
+    // Start from bottom left
+    vertex(x, y + h);
+    // Bottom right
+    vertex(x + w, y + h);
+    // Top right with curve
+    vertex(x + w, y + radius);
+    quadraticVertex(x + w, y, x + w - radius, y);
+    // Top edge
+    vertex(x + radius, y);
+    // Top left with curve
+    quadraticVertex(x, y, x, y + radius);
+    // Left edge back to start
+    vertex(x, y + h);
+    endShape(CLOSE);
+    pop();
+  }
+  
+  // Helper function for security monitoring
+  // Note: Actual monitoring functions are implemented in Supabase SQL
+  
+  function windowResized() {
+    // Existing resize code...
+    
+    // Update auth modal HTML input positions if active
+    if (typeof window.authModal !== 'undefined' && 
+        window.authModal.active && 
+        typeof updateHtmlInputPositions === 'function') {
+      updateHtmlInputPositions();
+    }
+  }
+  
+  
