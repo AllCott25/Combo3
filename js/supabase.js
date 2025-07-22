@@ -885,22 +885,26 @@ async function trackMistake() {
   }
   
   try {
-    totalMistakes++;
-    console.log("📊 Tracking mistake, total mistakes:", totalMistakes);
+    const newMistakeTotal = totalMistakes + 1;
+    console.log("📊 Tracking mistake, new total would be:", newMistakeTotal);
     
     const { error } = await supabase
       .from('game_sessions')
-      .update({ mistakes_total: totalMistakes })
+      .update({ mistakes_total: newMistakeTotal })
       .eq('session_id', currentSessionId);
       
     if (error) {
       console.error("Error tracking mistake:", error);
       console.error("Error details:", error.details, error.hint, error.message);
+      // Don't increment local counter if database update failed
     } else {
-      console.log("✅ Mistake tracked successfully");
+      // Only increment local counter after successful database update
+      totalMistakes = newMistakeTotal;
+      console.log("✅ Mistake tracked successfully, total mistakes:", totalMistakes);
     }
   } catch (error) {
     console.error("Error in trackMistake:", error);
+    // Don't increment local counter if there was an exception
   }
 }
 
@@ -917,22 +921,26 @@ async function trackHintUsed() {
   }
   
   try {
-    totalHintsUsed++;
-    console.log("📊 Tracking hint used, total hints:", totalHintsUsed);
+    const newHintTotal = totalHintsUsed + 1;
+    console.log("📊 Tracking hint used, new total would be:", newHintTotal);
     
     const { error } = await supabase
       .from('game_sessions')
-      .update({ hints_used: totalHintsUsed })
+      .update({ hints_used: newHintTotal })
       .eq('session_id', currentSessionId);
       
     if (error) {
       console.error("Error tracking hint:", error);
       console.error("Error details:", error.details, error.hint, error.message);
+      // Don't increment local counter if database update failed
     } else {
-      console.log("✅ Hint tracked successfully");
+      // Only increment local counter after successful database update
+      totalHintsUsed = newHintTotal;
+      console.log("✅ Hint tracked successfully, total hints:", totalHintsUsed);
     }
   } catch (error) {
     console.error("Error in trackHintUsed:", error);
+    // Don't increment local counter if there was an exception
   }
 }
 
