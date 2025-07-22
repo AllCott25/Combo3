@@ -1324,6 +1324,19 @@ async function handleEmailPasswordAuth(isSignUp) {
     return;
   }
   
+  // Additional password complexity validation for sign-up
+  if (isSignUp) {
+    const hasUppercase = /[A-Z]/.test(password);
+    const hasLowercase = /[a-z]/.test(password);
+    const hasNumbers = /\d/.test(password);
+    const hasSymbols = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password);
+    
+    if (!hasUppercase || !hasLowercase || !hasNumbers || !hasSymbols) {
+      window.authModal.passwordError = 'Password must contain uppercase, lowercase, numbers, and symbols';
+      return;
+    }
+  }
+  
   try {
     // Switch to loading mode and remove HTML inputs
     window.authModal.mode = 'loading';

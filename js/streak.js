@@ -107,6 +107,9 @@ const StreakSystem = (function() {
         // Consecutive day number - increment streak
         streakData.currentStreak++;
         streakData.longestStreak = Math.max(streakData.longestStreak, streakData.currentStreak);
+      } else if (streakData.lastCompletedDayNumber === dayNumber) {
+        // Same day completion - don't change streak, just update longest if current is higher
+        streakData.longestStreak = Math.max(streakData.longestStreak, streakData.currentStreak);
       } else {
         // Non-consecutive - reset streak
         streakData.currentStreak = 1;
