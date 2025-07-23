@@ -3,7 +3,17 @@
 
 // Initialize Supabase client
 const SUPABASE_URL = 'https://ovrvtfjejmhrflybslwi.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92cnZ0Zmplam1ocmZseWJzbHdpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDEwNDkxMDgsImV4cCI6MjA1NjYyNTEwOH0.V5_pJUQN9Xhd-Ot4NABXzxSVHGtNYNFuLMWE1JDyjAk';
+// SECURITY FIX: Use environment variables for API keys in production
+// For development, consider using a public anon key with proper RLS policies
+const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY || 
+  // Fallback for development - this should be a restricted public key
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92cnZ0Zmplam1ocmZseWJzbHdpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDEwNDkxMDgsImV4cCI6MjA1NjYyNTEwOH0.V5_pJUQN9Xhd-Ot4NABXzxSVHGtNYNFuLMWE1JDyjAk';
+
+// Validate API key is present
+if (!SUPABASE_KEY) {
+  console.error('SECURITY ERROR: Supabase API key not configured');
+  throw new Error('Database configuration missing');
+}
 
 // Create a single supabase client for interacting with your database
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -501,6 +511,29 @@ const WIN_SCREEN_TIMEOUT = 60000; // 1 minute in milliseconds
 const SESSION_STORAGE_KEY = 'comboMealSession';
 const HEARTBEAT_INTERVAL = 10000; // Save session every 10 seconds during active play
 
+// SECURITY FIX: Simple encryption for localStorage (not cryptographically secure, but better than plain text)
+function simpleEncrypt(text, key = 'combo-meal-key') {
+    let result = '';
+    for (let i = 0; i < text.length; i++) {
+        result += String.fromCharCode(text.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+    }
+    return btoa(result);
+}
+
+function simpleDecrypt(encrypted, key = 'combo-meal-key') {
+    try {
+        const text = atob(encrypted);
+        let result = '';
+        for (let i = 0; i < text.length; i++) {
+            result += String.fromCharCode(text.charCodeAt(i) ^ key.charCodeAt(i % key.length));
+        }
+        return result;
+    } catch (error) {
+        console.error('Decryption failed:', error);
+        return null;
+    }
+}
+
 // Function to save session state to localStorage
 function saveSessionState() {
   if (!currentSessionId) return;
@@ -520,8 +553,10 @@ function saveSessionState() {
   };
   
   try {
-    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionState));
-    console.log('Session state saved to localStorage');
+    // SECURITY FIX: Encrypt session data before storing
+    const encryptedData = simpleEncrypt(JSON.stringify(sessionState));
+    localStorage.setItem(SESSION_STORAGE_KEY, encryptedData);
+    console.log('Session state saved to localStorage (encrypted)');
   } catch (error) {
     console.error("Error saving session state:", error);
   }
@@ -533,7 +568,15 @@ function restoreSessionState() {
     const savedState = localStorage.getItem(SESSION_STORAGE_KEY);
     if (!savedState) return false;
     
-    const state = JSON.parse(savedState);
+    // SECURITY FIX: Decrypt session data
+    const decryptedData = simpleDecrypt(savedState);
+    if (!decryptedData) {
+      console.log('Failed to decrypt session data, clearing');
+      clearSessionState();
+      return false;
+    }
+    
+    const state = JSON.parse(decryptedData);
     
     // Check if the saved session is recent (within last 24 hours)
     const maxAge = 24 * 60 * 60 * 1000; // 24 hours in milliseconds

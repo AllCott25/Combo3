@@ -72,6 +72,24 @@ nonInteractiveTextStyle.textContent = `
 `;
 document.head.appendChild(nonInteractiveTextStyle);
 
+// SECURITY FIX: Add text sanitization function
+function sanitizeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// SECURITY FIX: Safe DOM content setting
+function setSafeContent(element, content, isHtml = false) {
+    if (isHtml) {
+        // For HTML content, use a more sophisticated sanitizer
+        // In production, consider using DOMPurify library
+        element.innerHTML = sanitizeHtml(content);
+    } else {
+        element.textContent = content;
+    }
+}
+
 // Initialize Supabase client
 const SUPABASE_URL = 'https://ovrvtfjejmhrflybslwi.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92cnZ0Zmplam1ocmZseWJzbHdpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDEwNDkxMDgsImV4cCI6MjA1NjYyNTEwOH0.V5_pJUQN9Xhd-Ot4NABXzxSVHGtNYNFuLMWE1JDyjAk';
@@ -129,9 +147,15 @@ let originalDates = new Map(); // Store original dates for revert
 async function checkSession() {
     const { data, error } = await supabase.auth.getSession();
     
-    if (data.session) {
-        showAdminPanel();
-        loadFormData();
+    if (data.session && data.session.user) {
+        // SECURITY FIX: Verify admin role on session check
+        if (await verifyAdminRole(data.session.user)) {
+            showAdminPanel();
+            loadFormData();
+        } else {
+            console.warn('User session found but lacks admin privileges');
+            await supabase.auth.signOut();
+        }
     }
 }
 
@@ -181,12 +205,29 @@ document.addEventListener('DOMContentLoaded', () => {
         if (date) {
             playtestBtn.disabled = false;
             playtestBtn.onclick = () => {
-                window.open(`index.html?date=${date}`, '_blank');
+                // SECURITY FIX: Validate date input and use safe URL construction
+                const sanitizedDate = sanitizeHtml(date);
+                if (!isValidDate(sanitizedDate)) {
+                    console.error('Invalid date format');
+                    return;
+                }
+                // Only allow relative URLs to prevent open redirect
+                const safeUrl = `index.html?date=${encodeURIComponent(sanitizedDate)}`;
+                window.open(safeUrl, '_blank');
             };
         } else {
             playtestBtn.disabled = true;
             playtestBtn.onclick = null;
         }
+    }
+    
+    // SECURITY FIX: Add date validation function
+    function isValidDate(dateString) {
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dateRegex.test(dateString)) return false;
+        
+        const date = new Date(dateString);
+        return date instanceof Date && !isNaN(date) && date.toISOString().substr(0, 10) === dateString;
     }
     if (playtestBtn && dateInput) {
         updatePlaytestBtn();
@@ -209,10 +250,39 @@ async function handleLogin(e) {
         
         if (error) throw error;
         
+        // SECURITY FIX: Verify admin role before granting access
+        if (!await verifyAdminRole(data.user)) {
+            await supabase.auth.signOut();
+            throw new Error('Access denied: Admin privileges required');
+        }
+        
         showAdminPanel();
         loadFormData();
     } catch (error) {
         loginError.textContent = `Login failed: ${error.message}`;
+    }
+}
+
+// SECURITY FIX: Add admin role verification function
+async function verifyAdminRole(user) {
+    try {
+        // Check if user has admin role in profiles table
+        const { data: profile, error } = await supabase
+            .from('profiles')
+            .select('role, admin_level')
+            .eq('id', user.id)
+            .single();
+        
+        if (error) {
+            console.error('Error checking admin role:', error);
+            return false;
+        }
+        
+        // Only allow users with admin role
+        return profile && (profile.role === 'admin' || profile.admin_level > 0);
+    } catch (error) {
+        console.error('Admin verification failed:', error);
+        return false;
     }
 }
 
