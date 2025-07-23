@@ -85,26 +85,23 @@ let firstInactivityMessageShown = false;
       if (typeof filteredMoveHistory[i] === 'object' && 
           (filteredMoveHistory[i].type === 'egg' || filteredMoveHistory[i].type === 'easterEgg')) {
         // Draw Easter Egg counter (nested oval and circle)
-        // Outer white oval
+        // Outer white oval using design system
         fill(255);
-        stroke(0);
-        strokeWeight(2); // Increased to 2px
-        ellipse(x, y, circleSize * 1.1, circleSize * 1.5); // Vertical oval shape
+        DesignSystem.applyStroke('standard', UI_COLORS.text);
+        ellipse(x, y, circleSize * 1.1, circleSize * 1.5);
         
-        // Inner yellow circle
-        fill(COLORS.tertiary); // Use the game's yellow color
-        stroke(0);
-        strokeWeight(1);
+        // Inner yellow circle using design system
+        fill(COLORS.tertiary);
+        DesignSystem.applyStroke('light', UI_COLORS.text);
         circle(x, y, circleSize * 0.8);
         strokeWeight(1);
       } else {
         // Regular counter
         let moveColor = filteredMoveHistory[i];
         
-        // Draw regular counter with 2px black outline
+        // Draw regular counter with standardized outline
         fill(moveColor);
-        stroke(0);
-        strokeWeight(2); // Increased to 2px
+        DesignSystem.applyStroke('standard', UI_COLORS.text);
         circle(x, y, circleSize);
       }
     }
@@ -153,23 +150,19 @@ let firstInactivityMessageShown = false;
         // Check if this combo was completed with a hint - APlasker
         const isHintCombo = completedGreenVessels[i] && completedGreenVessels[i].isHint;
         
-        // Completed combo: 100% opacity circle with white checkmark
-        // Use hint color (red) if completed with hint, otherwise green
+        // Completed combo using design system
         fill(isHintCombo ? COLORS.vesselHint : COLORS.green);
-        stroke('black');
-        strokeWeight(2);
+        DesignSystem.applyStroke('standard', UI_COLORS.text);
         circle(x, y, circleSize * 1.2);
         
-        // Draw white checkmark
-        stroke('white');
-        strokeWeight(3);
+        // Draw white checkmark using design system
+        DesignSystem.applyStroke('emphasis', '#ffffff');
         line(x - circleSize * 0.3, y, x - circleSize * 0.1, y + circleSize * 0.3);
         line(x - circleSize * 0.1, y + circleSize * 0.3, x + circleSize * 0.4, y - circleSize * 0.3);
       } else {
-        // Incomplete combo: 50% opacity green circle
-        fill(COLORS.green + '80'); // Add 80 for 50% opacity in hex
-        stroke('black');
-        strokeWeight(1.5);
+        // Incomplete combo using design system
+        fill(COLORS.green + '80'); // 50% opacity
+        DesignSystem.applyStroke('light', UI_COLORS.text);
         circle(x, y, circleSize);
       }
     }

@@ -307,25 +307,21 @@ let intermediate_combinations = [
       // Isolate drawing context for the button
       push();
       
-      // Calculate relative values for visual elements
-      const cornerRadius = this.customCornerRadius !== null ? this.customCornerRadius : Math.max(this.w * 0.15, 10);
-      const strokeW = Math.max(this.w * 0.025, 2);
+      // Use design system for consistent styling
+      const cornerRadius = this.customCornerRadius !== null ? this.customCornerRadius : RADIUS.md;
       
       rectMode(CENTER);
       if (this.disabled) {
         let buttonColor = color(this.color);
         buttonColor.setAlpha(128);
         fill(buttonColor);
-      } else if (this.hovered) {
-        fill(lerpColor(color(this.color), color(255), 0.2));
       } else {
-        fill(this.color);
+        DesignSystem.applyFill(this.color, this.hovered, 'light');
       }
       
-      // Handle outline based on borderColor
+      // Handle outline using design system
       if (this.borderColor) {
-        stroke(this.borderColor);
-        strokeWeight(Math.max(this.h * 0.04, 1.5)); // Match text weight, min 1.5px
+        DesignSystem.applyStroke('standard', this.borderColor);
       } else {
         noStroke();
       }
