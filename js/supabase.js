@@ -205,11 +205,23 @@ function processRecipeData(recipe, combinations, ingredients, easterEggs = []) {
   const intermediateCombos = combinations.filter(combo => combo.is_final === false);
   console.log("Intermediate combinations:", intermediateCombos);
   
-  // Get all base ingredients
-  const baseIngredients = ingredients
+  // Get all base ingredients - DUPLICATE INGREDIENT FIX: Preserve instances instead of deduplicating
+  // Create an array of ingredient instances, each with name and metadata
+  const baseIngredientInstances = ingredients
     .filter(ing => ing.is_base === true)
-    .map(ing => ing.name);
-  console.log("All base ingredients:", baseIngredients);
+    .map(ing => ({
+      name: ing.name,
+      ing_id: ing.ing_id,
+      combo_id: ing.combo_id,
+      // Add instance tracking for duplicate ingredient support
+      instanceId: `${ing.name}_${ing.ing_id}`, // Unique ID for this specific instance
+      validCombos: [ing.combo_id] // This instance can contribute to this combo
+    }));
+  
+  // Also create the deduplicated list for backward compatibility
+  const baseIngredients = [...new Set(baseIngredientInstances.map(inst => inst.name))];
+  console.log("Base ingredient instances:", baseIngredientInstances);
+  console.log("Unique base ingredient names:", baseIngredients);
   
   // Create maps for easier lookups
   const comboIdToName = {};
@@ -342,7 +354,8 @@ function processRecipeData(recipe, combinations, ingredients, easterEggs = []) {
     date: recipe.date || "###",
     intermediateCombinations,
     finalCombination,
-    baseIngredients: [...new Set(baseIngredients)],
+    baseIngredients: [...new Set(baseIngredients)], // Keep for backward compatibility
+    baseIngredientInstances, // DUPLICATE INGREDIENT FIX: Add ingredient instances for multi-instance support
     easterEggs: easterEggs || [],
     description: recipe.description,
     author: recipe.author
