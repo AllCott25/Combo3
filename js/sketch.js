@@ -397,9 +397,7 @@ let intermediate_combinations = [
   function preload() {
     console.log("Preloading assets...");
     
-    // Load wallpaper SVG using HTML5 Canvas for high-quality rendering - APlasker
-    console.log("🚀 Loading wallpaper SVG via HTML5 Canvas...");
-    loadWallpaperSVGHighRes();
+    // No longer loading wallpaper during initialization - moved to Cook button press
     
     // Use web-safe fonts directly instead of trying to load Google Fonts
   titleFont = 'Courier, "Courier New", monospace';
@@ -409,16 +407,33 @@ let intermediate_combinations = [
     console.log("Using web-safe fonts instead of Google Fonts");
   }
   
+  // New function to load wallpaper specifically for Cook button with immediate timeout
+  function loadWallpaperForCook() {
+    console.log("📐 Loading SVG for Cook transition with immediate timeout...");
+    
+    // Much shorter timeout for Cook button - if it doesn't load immediately, skip animation
+    const cookLoadingTimeout = setTimeout(() => {
+      console.warn("⚠️ Wallpaper loading timeout for Cook - starting game immediately");
+      wallpaperImageReady = false;
+      actuallyStartGame(); // Start game without animation
+    }, 500); // Only 500ms timeout for immediate loading
+    
+    loadWallpaperSVGHighRes(cookLoadingTimeout, true);
+  }
+
   // Function to load SVG at high resolution using HTML5 Canvas - APlasker
-  function loadWallpaperSVGHighRes() {
+  function loadWallpaperSVGHighRes(timeoutHandle = null, forCookTransition = false) {
     console.log("📐 Loading SVG via HTML5 Canvas for maximum quality...");
     
-    // Set a timeout to prevent infinite loading - APlasker
-    const loadingTimeout = setTimeout(() => {
-      console.warn("⚠️ Wallpaper loading timeout - proceeding without animation");
-      wallpaperImageReady = false;
-      loadingComplete = true; // Allow game to continue
-    }, 5000); // 5 second timeout
+    // Set a timeout to prevent infinite loading - APlasker (only if not provided)
+    let loadingTimeout = timeoutHandle;
+    if (!loadingTimeout) {
+      loadingTimeout = setTimeout(() => {
+        console.warn("⚠️ Wallpaper loading timeout - proceeding without animation");
+        wallpaperImageReady = false;
+        loadingComplete = true; // Allow game to continue
+      }, 5000); // 5 second timeout for normal loading
+    }
     
     // Create an image element to load the SVG
     const img = new Image();
@@ -469,17 +484,38 @@ let intermediate_combinations = [
             console.log(`📐 Final p5.js image dimensions: ${wallpaperHighResImage.width}x${wallpaperHighResImage.height}`);
             wallpaperImageReady = true; // Mark image as truly ready - APlasker
             console.log("✅ Wallpaper image is now ready for animation");
+            
+            // Clear the timeout since loading succeeded
+            clearTimeout(loadingTimeout);
+            
+            // If this was for cook transition, start the animation immediately
+            if (forCookTransition) {
+              if (!wallpaperAnimation) {
+                wallpaperAnimation = new WallpaperAnimation();
+              }
+              console.log("🍳 Starting cook transition with loaded wallpaper");
+              wallpaperAnimationActive = true;
+              wallpaperAnimation.startCookTransition();
+            }
           },
           function() {
             console.log("❌ Failed to convert canvas to p5.js image - proceeding without animation");
             wallpaperImageReady = false;
-            loadingComplete = true; // Allow game to continue
+            if (forCookTransition) {
+              actuallyStartGame(); // Start game immediately if loading failed
+            } else {
+              loadingComplete = true; // Allow game to continue
+            }
           }
         );
       } catch (error) {
         console.error("❌ Error creating canvas or converting image:", error);
         wallpaperImageReady = false;
-        loadingComplete = true; // Allow game to continue
+        if (forCookTransition) {
+          actuallyStartGame(); // Start game immediately if loading failed
+        } else {
+          loadingComplete = true; // Allow game to continue
+        }
       }
     };
     
@@ -487,7 +523,11 @@ let intermediate_combinations = [
       clearTimeout(loadingTimeout); // Cancel timeout since we got an error
       console.log("❌ Failed to load SVG as DOM image - proceeding without animation");
       wallpaperImageReady = false;
-      loadingComplete = true; // Allow game to continue without wallpaper
+      if (forCookTransition) {
+        actuallyStartGame(); // Start game immediately if loading failed
+      } else {
+        loadingComplete = true; // Allow game to continue without wallpaper
+      }
     };
     
     // Start loading the SVG
@@ -767,6 +807,13 @@ let intermediate_combinations = [
     if (vessels.length === 0 || isLoadingRecipe) {
       console.log("Cannot start game yet - initialization incomplete");
       return;
+    }
+    
+    // Try to load wallpaper for animation - but with immediate timeout
+    if (!wallpaperImageReady && !wallpaperAnimation) {
+      console.log("🚀 Loading wallpaper for Cook transition...");
+      loadWallpaperForCook();
+      return; // Wait for either successful load or timeout
     }
     
     // Start cook transition if wallpaper animation exists

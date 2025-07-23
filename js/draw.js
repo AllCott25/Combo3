@@ -1373,7 +1373,68 @@ let firstInactivityMessageShown = false;
     ellipse(x, y, petalSize, petalSize);
   }
 
-  // New function to draw loading animation with wallpaper tiles - APlasker
+  // Simple loading screen without wallpaper animation
+  function drawSimpleLoadingScreen() {
+    // Draw the COMPLETE start screen
+    drawTitle();
+    drawByline();
+    drawRecipeStats();
+    
+    // Draw buttons
+    if (typeof startButton !== 'undefined' && typeof tutorialButton !== 'undefined') {
+      // Position buttons for start screen
+      const cookButtonWidth = Math.max(playAreaWidth * 0.25, 120);
+      const buttonHeight = Math.max(playAreaHeight * 0.08, 40);
+      const tutorialButtonWidth = cookButtonWidth * 0.5;
+      
+      startButton.x = playAreaX + playAreaWidth * 0.5;
+      startButton.y = playAreaY + playAreaHeight * 0.88;
+      startButton.w = cookButtonWidth;
+      startButton.h = buttonHeight;
+      startButton.customCornerRadius = 12;
+      
+      tutorialButton.x = startButton.x - (cookButtonWidth/2) - (tutorialButtonWidth/2) - 20;
+      tutorialButton.y = startButton.y;
+      tutorialButton.w = tutorialButtonWidth;
+      tutorialButton.h = buttonHeight;
+      tutorialButton.customCornerRadius = 12;
+      tutorialButton.label = "First\nTime?";
+      tutorialButton.textSizeMultiplier = 0.8;
+      
+      tutorialButton.draw();
+      startButton.draw();
+    }
+    
+    // Draw version text
+    push();
+    textAlign(CENTER, CENTER);
+    const versionTextSize = Math.max(playAreaWidth * 0.016, 8);
+    textSize(versionTextSize);
+    const versionText = "v20250719.740PM.EDT - APlasker";
+    const combinedText = versionText + " | Say hi!";
+    
+    fill(100); // Gray color for version text
+    const versionWidth = textWidth(versionText);
+    const pipeWidth = textWidth(" | ");
+    const sayHiWidth = textWidth("Say hi!");
+    const totalWidth = versionWidth + pipeWidth + sayHiWidth;
+    const startX = playAreaX + playAreaWidth/2 - totalWidth/2;
+    
+    text(versionText, startX + versionWidth/2, playAreaY + playAreaHeight * 0.985);
+    fill(COLORS.primary);
+    text(" | Say hi!", startX + versionWidth + pipeWidth + sayHiWidth/2, playAreaY + playAreaHeight * 0.985);
+    pop();
+
+    // Show loading message if needed
+    if (isLoadingRecipe) {
+      fill(255);
+      textAlign(CENTER, CENTER);
+      textSize(18);
+      text("Loading recipe...", playAreaX + playAreaWidth/2, playAreaY + playAreaHeight/2 + 30);
+    }
+  }
+
+  // New function to draw loading animation with wallpaper tiles - APlasker (now deprecated)
   function drawLoadingAnimation() {
   // Always draw the COMPLETE start screen first - it's behind the wallpaper wall
   drawTitle();
@@ -1661,8 +1722,8 @@ function drawWallpaperAnimation() {
     
     // Check if we're still loading recipe data (initial loading state only)
     if (isLoadingRecipe) {
-      // Draw loading animation only during initial loading
-      drawLoadingAnimation();
+      // Draw simple loading screen without wallpaper animation
+      drawSimpleLoadingScreen();
       
       // Draw floral pattern border if there's space - moved here from outside
       drawFloralBorder();
@@ -1675,15 +1736,16 @@ function drawWallpaperAnimation() {
     
     // Check if wallpaper animation is still running (even after loading complete)
     if (wallpaperAnimationActive) {
+      // Draw floral pattern border FIRST so wallpaper appears on top
+      drawFloralBorder();
+      
+      // Draw top and bottom flowers FIRST so wallpaper appears on top
+      drawTopBottomFlowers();
+      
       const animationStillRunning = drawWallpaperAnimation();
       
       if (animationStillRunning) {
-        // Draw floral pattern border if there's space
-        drawFloralBorder();
-        
-        // Draw top and bottom flowers on narrow screens
-        drawTopBottomFlowers();
-        
+        // NOTE: drawWallpaperAnimation draws the wallpaper on top of the flowers
         return; // Don't draw normal game elements while animation is running
       }
     }
