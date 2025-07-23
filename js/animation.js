@@ -701,8 +701,14 @@ class WallpaperAnimation {
       this.state = 'CLOSING';
       this.closeStartTime = Date.now();
       this.splitProgress = 1; // Start from fully open position
+    } else if (this.state === 'STATIC') {
+      // Allow starting cook transition directly from STATIC state (when loaded on Cook button press)
+      console.log("🍳 Starting COOK transition directly from static state!");
+      this.state = 'CLOSING';
+      this.closeStartTime = Date.now();
+      this.splitProgress = 1; // Start from fully closed position, will close immediately
     } else {
-      console.warn("⚠️ Cannot start cook transition - not in READY_FOR_COOK state:", this.state);
+      console.warn("⚠️ Cannot start cook transition - not in valid state:", this.state);
     }
   }
 
