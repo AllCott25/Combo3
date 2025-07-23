@@ -117,9 +117,10 @@ function showAuthModal() {
       console.log('Modal active flag set to true');
     }
 
-    // Calculate modal dimensions and position - increased for better spacing
-    window.authModal.width = Math.min(playAreaWidth * 0.85, 450);
-    window.authModal.height = Math.min(playAreaHeight * 0.55, 320);
+    // Calculate modal dimensions using design system
+    const modalSize = DesignSystem.getModalSize('auth', playAreaWidth, playAreaHeight);
+    window.authModal.width = modalSize.width;
+    window.authModal.height = modalSize.height;
     window.authModal.x = playAreaX + playAreaWidth / 2;
     // Position modal higher up to account for mobile keyboard
     window.authModal.y = playAreaY + playAreaHeight * 0.35;
@@ -164,26 +165,24 @@ function drawAuthModal() {
   noStroke();
   rect(0, 0, windowWidth, windowHeight);
   
-  // Draw modal background (matching game modal style)
+  // Draw modal background using design system
   rectMode(CENTER);
   fill(255, 255, 255, window.authModal.opacity);
-  stroke(COLORS.primary);
-  strokeWeight(2);
-  rect(window.authModal.x, window.authModal.y, window.authModal.width, window.authModal.height, 12);
+  DesignSystem.applyStroke('emphasis', UI_COLORS.primary);
+  rect(window.authModal.x, window.authModal.y, window.authModal.width, window.authModal.height, RADIUS.xl);
   
   // Draw close button (matching help modal style)
   const closeX = window.authModal.x - window.authModal.width/2 + 25;
   const closeY = window.authModal.y - window.authModal.height/2 + 25;
   const closeSize = 15;
   
-  // Close button background
+  // Close button background using design system
   noStroke();
-  fill(COLORS.secondary);
+  fill(UI_COLORS.secondary);
   circle(closeX, closeY, closeSize * 2);
   
   // Close button X
-  stroke(255);
-  strokeWeight(2);
+  DesignSystem.applyStroke('standard', '#ffffff');
   line(closeX - closeSize/2, closeY - closeSize/2, closeX + closeSize/2, closeY + closeSize/2);
   line(closeX - closeSize/2, closeY + closeSize/2, closeX + closeSize/2, closeY - closeSize/2);
   
@@ -210,25 +209,24 @@ function drawSignInContent() {
   // Check if HTML inputs are active (for modern text functionality)
   const htmlInputsActive = document.getElementById('auth-input-container') !== null;
   
-  // Title (using game's font system) - with line breaks to fit in modal
-  fill(COLORS.primary);
+  // Title using design system
+  fill(UI_COLORS.primary);
   noStroke();
   textAlign(CENTER, CENTER);
-  textFont(titleFont);
-  textSize(Math.max(modal.width * 0.045, 14));
-  textStyle(BOLD);
+  DesignSystem.applyTextStyle('title', playAreaWidth);
   text("Create an Account to Save\nyour Recipes & your Streak!", modal.x, modal.y - modal.height * 0.32);
   
-  // Email input field
+  // Email input field using design system
   const inputWidth = modal.width * 0.8;
-  const inputHeight = 35;
+  const inputHeight = BUTTON_STYLES.height.md;
   const emailY = modal.y - modal.height * 0.15;
   
   rectMode(CENTER);
   fill(255);
-  stroke(modal.focusedField === 'email' ? COLORS.primary : '#cccccc');
-  strokeWeight(modal.focusedField === 'email' ? 3 : 2);
-  rect(modal.x, emailY, inputWidth, inputHeight, 8);
+  const borderColor = modal.focusedField === 'email' ? UI_COLORS.border.focus : UI_COLORS.border.medium;
+  const borderWeight = modal.focusedField === 'email' ? 'emphasis' : 'standard';
+  DesignSystem.applyStroke(borderWeight, borderColor);
+  rect(modal.x, emailY, inputWidth, inputHeight, RADIUS.md);
   
   // Email placeholder/text (only show if HTML inputs are not active)
   if (!htmlInputsActive) {
@@ -236,20 +234,16 @@ function drawSignInContent() {
       fill(150);
       noStroke();
       textAlign(LEFT, CENTER);
-      textFont(bodyFont);
-      textSize(Math.max(modal.width * 0.025, 11));
-      textStyle(NORMAL);
-      const placeholderX = modal.x - inputWidth/2 + 12;
+      DesignSystem.applyTextStyle('body', playAreaWidth);
+      const placeholderX = modal.x - inputWidth/2 + SPACING.md;
       text("Email address", placeholderX, emailY);
     } else {
-      // Show email text
-      fill(COLORS.text);
+      // Show email text using design system
+      fill(UI_COLORS.text);
       noStroke();
       textAlign(LEFT, CENTER);
-      textFont(bodyFont);
-      textSize(Math.max(modal.width * 0.025, 11));
-      textStyle(NORMAL);
-      const textX = modal.x - inputWidth/2 + 12;
+      DesignSystem.applyTextStyle('body', playAreaWidth);
+      const textX = modal.x - inputWidth/2 + SPACING.md;
       text(modal.emailInput, textX, emailY);
     }
     
@@ -289,13 +283,14 @@ function drawSignInContent() {
     }
   }
   
-  // Password input field
+  // Password input field using design system
   const passwordY = modal.y;
   
   fill(255);
-  stroke(modal.focusedField === 'password' ? COLORS.primary : '#cccccc');
-  strokeWeight(modal.focusedField === 'password' ? 3 : 2);
-  rect(modal.x, passwordY, inputWidth, inputHeight, 8);
+  const passwordBorderColor = modal.focusedField === 'password' ? UI_COLORS.border.focus : UI_COLORS.border.medium;
+  const passwordBorderWeight = modal.focusedField === 'password' ? 'emphasis' : 'standard';
+  DesignSystem.applyStroke(passwordBorderWeight, passwordBorderColor);
+  rect(modal.x, passwordY, inputWidth, inputHeight, RADIUS.md);
   
   // Password placeholder/text (only show if HTML inputs are not active)
   if (!htmlInputsActive) {
@@ -359,47 +354,45 @@ function drawSignInContent() {
     }
   }
   
-  // Error messages - positioned below both input fields
-  const errorY = passwordY + 35; // Position below password field with more spacing
+  // Error messages - positioned below both input fields with proper spacing
+  const errorY = passwordY + SPACING.xl + SPACING.modal.errorMargin;
   
   if (modal.emailError) {
-    fill(COLORS.secondary);
+    fill(UI_COLORS.error);
     noStroke();
     textAlign(CENTER, CENTER);
-    textSize(Math.max(modal.width * 0.03, 12));
-    textStyle(NORMAL);
-    text(modal.emailError, modal.x, errorY);
+    DesignSystem.applyTextStyle('error', playAreaWidth);
+    // Wrap error text for better display
+    text(modal.emailError, modal.x, errorY, modal.width * 0.9);
   }
   
   if (modal.passwordError) {
-    fill(COLORS.secondary);
+    fill(UI_COLORS.error);
     noStroke();
     textAlign(CENTER, CENTER);
-    textSize(Math.max(modal.width * 0.03, 12));
-    textStyle(NORMAL);
-    text(modal.passwordError, modal.x, errorY);
+    DesignSystem.applyTextStyle('error', playAreaWidth);
+    // Wrap error text for better display
+    text(modal.passwordError, modal.x, errorY, modal.width * 0.9);
   }
   
-  // Forgot Password link - centered between password field and buttons
+  // Forgot Password link using design system
   const buttonY = modal.y + modal.height * 0.26;
-  const forgotPasswordY = modal.y + modal.height * 0.13; // Centered between password (modal.y) and buttons (modal.y + 0.26)
+  const forgotPasswordY = modal.y + modal.height * 0.13;
   const forgotPasswordText = "Forgot your password?";
-  const forgotPasswordTextSize = Math.max(modal.width * 0.025, 10);
   
   textAlign(CENTER, CENTER);
-  textFont(bodyFont);
-  textSize(forgotPasswordTextSize);
-  textStyle(NORMAL);
+  DesignSystem.applyTextStyle('body', playAreaWidth);
   
   // Check if forgot password link is hovered
   const forgotPasswordTextWidth = textWidth(forgotPasswordText);
+  const forgotPasswordTextSize = DesignSystem.getFontSize('body', playAreaWidth);
   const forgotPasswordHovered = mouseX > modal.x - forgotPasswordTextWidth/2 && 
                                 mouseX < modal.x + forgotPasswordTextWidth/2 &&
                                 mouseY > forgotPasswordY - forgotPasswordTextSize/2 &&
                                 mouseY < forgotPasswordY + forgotPasswordTextSize/2;
   
-  // Draw forgot password link with hover effect
-  fill(forgotPasswordHovered ? COLORS.secondary : COLORS.primary);
+  // Draw forgot password link with hover effect using design system
+  fill(forgotPasswordHovered ? UI_COLORS.secondary : UI_COLORS.primary);
   noStroke();
   textStyle(forgotPasswordHovered ? BOLD : NORMAL);
   text(forgotPasswordText, modal.x, forgotPasswordY);
@@ -412,48 +405,43 @@ function drawSignInContent() {
     h: forgotPasswordTextSize + 4
   };
   
-  // Buttons (matching game button style) - adjusted for larger modal
+  // Buttons using design system
   const buttonWidth = modal.width * 0.37;
-  const buttonHeight = 40;
-  const buttonSpacing = modal.width * 0.03;
+  const buttonHeight = BUTTON_STYLES.height.md;
+  const buttonSpacing = SPACING.modal.buttonGap;
   
   // Sign In button
   const signInX = modal.x - buttonWidth/2 - buttonSpacing;
   const signInHovered = dist(mouseX, mouseY, signInX, buttonY) < buttonWidth/2;
   
   rectMode(CENTER);
-  fill(signInHovered ? lerpColor(color(255), color(COLORS.primary), 0.1) : 255);
-  stroke(COLORS.primary);
-  strokeWeight(3); // Standardized stroke weight
-  rect(signInX, buttonY, buttonWidth, buttonHeight, 8);
+  DesignSystem.applyFill(UI_COLORS.tertiary, signInHovered, 'primary');
+  DesignSystem.applyStroke('emphasis', UI_COLORS.primary);
+  rect(signInX, buttonY, buttonWidth, buttonHeight, RADIUS.md);
   
-  // Use new text wrapping function
-  const signInFontSize = Math.max(buttonHeight * 0.25, 12);
-  drawButtonText("Sign In", signInX, buttonY, buttonWidth * 0.9, signInFontSize, COLORS.primary);
+  // Button text using design system
+  const signInFontSize = DesignSystem.getFontSize('button', playAreaWidth);
+  drawButtonText("Sign In", signInX, buttonY, buttonWidth * 0.9, signInFontSize, UI_COLORS.primary);
   
   // Create Account button  
   const signUpX = modal.x + buttonWidth/2 + buttonSpacing;
   const signUpHovered = dist(mouseX, mouseY, signUpX, buttonY) < buttonWidth/2;
   
-  fill(signUpHovered ? lerpColor(color(COLORS.primary), color(255), 0.2) : COLORS.primary);
-  stroke(COLORS.primary); // Match stroke to fill color
-  strokeWeight(3); // Standardized stroke weight
-  rect(signUpX, buttonY, buttonWidth, buttonHeight, 8);
+  DesignSystem.applyFill(UI_COLORS.primary, signUpHovered, 'light');
+  DesignSystem.applyStroke('emphasis', UI_COLORS.primary);
+  rect(signUpX, buttonY, buttonWidth, buttonHeight, RADIUS.md);
   
-  // Use new text wrapping function
-  const signUpFontSize = Math.max(buttonHeight * 0.25, 12);
+  // Button text using design system
+  const signUpFontSize = DesignSystem.getFontSize('button', playAreaWidth);
   drawButtonText("Create Account", signUpX, buttonY, buttonWidth * 0.9, signUpFontSize, color(255));
   
-  // Terms text (clickable) - moved up for better spacing
+  // Terms text using design system - moved up for better spacing
   const termsText = "By continuing, you agree to our ";
   const linkText = "Terms & Conditions";
   const termsY = modal.y + modal.height * 0.38;
-  const termsTextSize = Math.max(modal.width * 0.025, 10);
   
   textAlign(CENTER, CENTER);
-  textFont(bodyFont);
-  textSize(termsTextSize);
-  textStyle(NORMAL);
+  DesignSystem.applyTextStyle('body', playAreaWidth);
   
   // Calculate text positions
   const fullText = termsText + linkText;
@@ -470,8 +458,8 @@ function drawSignInContent() {
   textAlign(LEFT, CENTER);
   text(termsText, startX, termsY);
   
-  // Draw clickable link text
-  fill(COLORS.primary);
+  // Draw clickable link text using design system
+  fill(UI_COLORS.primary);
   noStroke();
   textStyle(BOLD);
   text(linkText, linkStartX, termsY);

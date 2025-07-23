@@ -69,9 +69,8 @@ function drawWinScreen() {
     fill(0);
     text(label, x, y);
     
-    // Draw underline
-    stroke(0);
-    strokeWeight(1);
+    // Draw underline using design system
+    DesignSystem.applyStroke('light', UI_COLORS.text);
     const underlineWidth = width * 0.8; // 80% of available width
     const underlineStartX = x + label.length * (labelSize * 0.5); // Start after label text
     line(underlineStartX, underlineY, x + width, underlineY);
