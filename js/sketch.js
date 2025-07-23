@@ -166,8 +166,9 @@ let intermediate_combinations = [
   let wallpaperAnimation; // Global wallpaper animation instance - APlasker
   let wallpaperHighResImage; // Final p5.js compatible image - APlasker
   let wallpaperImageReady = false; // Track when wallpaper image is truly loaded - APlasker
-  let loadingComplete = false; // Track when loading is complete for split reveal - APlasker
   let wallpaperAnimationActive = false; // Track if wallpaper animation is running - APlasker
+  let wallpaperLoadingStartTime = null; // Track wallpaper loading timeout - BUGFIX
+  let loadingComplete = false; // Track when loading is complete for split reveal - APlasker
   
   // Completion check state variables - APlasker
   let completionCheckInProgress = false;
@@ -416,12 +417,28 @@ let intermediate_combinations = [
   function loadWallpaperSVGHighRes() {
     console.log("📐 Loading SVG via HTML5 Canvas for maximum quality...");
     
+    // Set a timeout to prevent infinite loading - APlasker
+    const loadingTimeout = setTimeout(() => {
+      console.warn("⚠️ Wallpaper loading timeout - proceeding without animation");
+      wallpaperImageReady = false;
+      loadingComplete = true; // Allow game to continue
+    }, 5000); // 5 second timeout
+    
     // Create an image element to load the SVG
     const img = new Image();
     
     img.onload = function() {
+      clearTimeout(loadingTimeout); // Cancel timeout since loading succeeded
       console.log("✅ SVG loaded as DOM image");
       console.log(`📊 Natural SVG dimensions: ${img.naturalWidth}x${img.naturalHeight}`);
+      
+      // Validate image dimensions before proceeding
+      if (img.naturalWidth === 0 || img.naturalHeight === 0) {
+        console.warn("⚠️ Invalid SVG dimensions detected - using fallback");
+        wallpaperImageReady = false;
+        loadingComplete = true;
+        return;
+      }
       
       // Create high-resolution canvas (4x natural size for crisp quality)
       const hiResScale = 4;
@@ -430,41 +447,51 @@ let intermediate_combinations = [
       
       console.log(`🎯 Creating HTML5 canvas: ${canvasWidth}x${canvasHeight} (${hiResScale}x scale)`);
       
-      // Create native HTML5 canvas
-      const canvas = document.createElement('canvas');
-      canvas.width = canvasWidth;
-      canvas.height = canvasHeight;
-      const ctx = canvas.getContext('2d');
-      
-      // Enable high-quality rendering
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high';
-      
-      // Draw SVG to canvas at high resolution
-      ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
-      
-      console.log("✅ SVG rendered to HTML5 canvas at high quality");
-      
-      // Convert canvas to p5.js compatible image
-      const dataURL = canvas.toDataURL('image/png');
-      
-      // Load the high-quality canvas as p5.js image
-      wallpaperHighResImage = loadImage(dataURL, 
-        function() {
-          console.log("🎨 High-resolution wallpaper converted to p5.js image successfully!");
-          console.log(`📐 Final p5.js image dimensions: ${wallpaperHighResImage.width}x${wallpaperHighResImage.height}`);
-          wallpaperImageReady = true; // Mark image as truly ready - APlasker
-          console.log("✅ Wallpaper image is now ready for animation");
-        },
-        function() {
-          console.log("❌ Failed to convert canvas to p5.js image");
-          wallpaperImageReady = false;
-        }
-      );
+      try {
+        // Create native HTML5 canvas
+        const canvas = document.createElement('canvas');
+        canvas.width = canvasWidth;
+        canvas.height = canvasHeight;
+        const ctx = canvas.getContext('2d');
+        
+        // Enable high-quality rendering
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        
+        // Draw SVG to canvas at high resolution
+        ctx.drawImage(img, 0, 0, canvasWidth, canvasHeight);
+        
+        console.log("✅ SVG rendered to HTML5 canvas at high quality");
+        
+        // Convert canvas to p5.js compatible image
+        const dataURL = canvas.toDataURL('image/png');
+        
+        // Load the high-quality canvas as p5.js image
+        wallpaperHighResImage = loadImage(dataURL, 
+          function() {
+            console.log("🎨 High-resolution wallpaper converted to p5.js image successfully!");
+            console.log(`📐 Final p5.js image dimensions: ${wallpaperHighResImage.width}x${wallpaperHighResImage.height}`);
+            wallpaperImageReady = true; // Mark image as truly ready - APlasker
+            console.log("✅ Wallpaper image is now ready for animation");
+          },
+          function() {
+            console.log("❌ Failed to convert canvas to p5.js image - proceeding without animation");
+            wallpaperImageReady = false;
+            loadingComplete = true; // Allow game to continue
+          }
+        );
+      } catch (error) {
+        console.error("❌ Error creating canvas or converting image:", error);
+        wallpaperImageReady = false;
+        loadingComplete = true; // Allow game to continue
+      }
     };
     
     img.onerror = function() {
-      console.log("❌ Failed to load SVG as DOM image");
+      clearTimeout(loadingTimeout); // Cancel timeout since we got an error
+      console.log("❌ Failed to load SVG as DOM image - proceeding without animation");
+      wallpaperImageReady = false;
+      loadingComplete = true; // Allow game to continue without wallpaper
     };
     
     // Start loading the SVG
@@ -474,6 +501,22 @@ let intermediate_combinations = [
   function setup() {
     createCanvas(windowWidth, windowHeight); // Fullscreen canvas for mobile
     textFont(bodyFont);
+    
+    // BUGFIX: Add canvas initialization validation
+    if (!canvas || width === 0 || height === 0) {
+      console.error("❌ Canvas initialization failed - retrying...");
+      setTimeout(() => {
+        try {
+          createCanvas(windowWidth, windowHeight);
+          console.log("✅ Canvas retry successful");
+        } catch (error) {
+          console.error("❌ Canvas retry failed:", error);
+          // Continue anyway with minimal functionality
+        }
+      }, 100);
+    } else {
+      console.log("✅ Canvas initialized successfully:", width, "x", height);
+    }
     
     // Initialize the touch system
     touchSystem.init(); // MOVED to interaction.js
@@ -486,14 +529,20 @@ let intermediate_combinations = [
     // Set frame rate to 30fps for consistent animation timing across devices
     frameRate(30);
     
+    // BUGFIX: Validate window dimensions before calculating play area
+    const safeWindowWidth = windowWidth || window.innerWidth || 800;
+    const safeWindowHeight = windowHeight || window.innerHeight || 600;
+    
     // Calculate play area dimensions
-    playAreaWidth = min(maxPlayWidth, windowWidth - 2 * playAreaPadding);
+    playAreaWidth = min(maxPlayWidth, safeWindowWidth - 2 * playAreaPadding);
     // Set a fixed aspect ratio for the play area (mobile phone-like)
-    playAreaHeight = min(windowHeight - 2 * playAreaPadding, playAreaWidth * 1.8); // 16:9 aspect ratio
+    playAreaHeight = min(safeWindowHeight - 2 * playAreaPadding, playAreaWidth * 1.8); // 16:9 aspect ratio
     
     // Center the play area both horizontally and vertically
-    playAreaX = (windowWidth - playAreaWidth) / 2;
-    playAreaY = (windowHeight - playAreaHeight) / 2;
+    playAreaX = (safeWindowWidth - playAreaWidth) / 2;
+    playAreaY = (safeWindowHeight - playAreaHeight) / 2;
+    
+    console.log("✅ Play area calculated:", playAreaX, playAreaY, playAreaWidth, playAreaHeight);
     
     // Initialize anonymous authentication automatically, then check completion
     initializeAuth().then(() => {
@@ -621,21 +670,24 @@ let intermediate_combinations = [
       final_combination = recipeData.finalCombination;
       easter_eggs = recipeData.easterEggs;
       
-      // DUPLICATE INGREDIENT FIX: Use ingredient instances instead of deduplicated names
-      // This allows recipes to have multiple instances of the same ingredient
-      if (recipeData.baseIngredientInstances && recipeData.baseIngredientInstances.length > 0) {
-        ingredients = recipeData.baseIngredientInstances.map(inst => inst.name); // Create one vessel per instance
-        base_ingredient_instances = recipeData.baseIngredientInstances; // Store instances for combination logic
-        console.log("Using ingredient instances:", base_ingredient_instances.length, "instances");
+      // BUGFIX: Use validated ingredient system based on server flag
+      // Prevents duplicate vessel creation and ensures proper fallback behavior
+      if (recipeData.useInstanceSystem && recipeData.baseIngredientInstances && recipeData.baseIngredientInstances.length > 0) {
+        // Use the multi-instance system for recipes with duplicate ingredients
+        ingredients = recipeData.baseIngredientInstances.map(inst => inst.name);
+        base_ingredient_instances = recipeData.baseIngredientInstances;
+        console.log("✅ Using MULTI-INSTANCE system:", base_ingredient_instances.length, "ingredient instances");
+        console.log("Instance details:", base_ingredient_instances.map(inst => `${inst.name} (${inst.instanceId})`));
       } else {
-        // Fallback to old method for backward compatibility
-        ingredients = recipeData.baseIngredients;
-        base_ingredient_instances = recipeData.baseIngredients.map((name, index) => ({
+        // Use the traditional system for simple recipes
+        ingredients = recipeData.baseIngredients || [];
+        base_ingredient_instances = ingredients.map((name, index) => ({
           name: name,
-          instanceId: `${name}_fallback_${index}`,
+          instanceId: `${name}_traditional_${index}`,
           validCombos: [] // Will be populated by combination logic
         }));
-        console.log("Using fallback ingredient system");
+        console.log("✅ Using TRADITIONAL system:", ingredients.length, "unique ingredients");
+        console.log("Ingredient list:", ingredients);
       }
       
       base_ingredients = recipeData.baseIngredients; // Ensure base_ingredients is set for stats
@@ -991,21 +1043,24 @@ let intermediate_combinations = [
       final_combination = recipeData.finalCombination;
       easter_eggs = recipeData.easterEggs;
       
-      // DUPLICATE INGREDIENT FIX: Use ingredient instances instead of deduplicated names
-      // This allows recipes to have multiple instances of the same ingredient
-      if (recipeData.baseIngredientInstances && recipeData.baseIngredientInstances.length > 0) {
-        ingredients = recipeData.baseIngredientInstances.map(inst => inst.name); // Create one vessel per instance
-        base_ingredient_instances = recipeData.baseIngredientInstances; // Store instances for combination logic
-        console.log("Using ingredient instances:", base_ingredient_instances.length, "instances");
+      // BUGFIX: Use validated ingredient system based on server flag
+      // Prevents duplicate vessel creation and ensures proper fallback behavior
+      if (recipeData.useInstanceSystem && recipeData.baseIngredientInstances && recipeData.baseIngredientInstances.length > 0) {
+        // Use the multi-instance system for recipes with duplicate ingredients
+        ingredients = recipeData.baseIngredientInstances.map(inst => inst.name);
+        base_ingredient_instances = recipeData.baseIngredientInstances;
+        console.log("✅ Using MULTI-INSTANCE system:", base_ingredient_instances.length, "ingredient instances");
+        console.log("Instance details:", base_ingredient_instances.map(inst => `${inst.name} (${inst.instanceId})`));
       } else {
-        // Fallback to old method for backward compatibility
-        ingredients = recipeData.baseIngredients;
-        base_ingredient_instances = recipeData.baseIngredients.map((name, index) => ({
+        // Use the traditional system for simple recipes
+        ingredients = recipeData.baseIngredients || [];
+        base_ingredient_instances = ingredients.map((name, index) => ({
           name: name,
-          instanceId: `${name}_fallback_${index}`,
+          instanceId: `${name}_traditional_${index}`,
           validCombos: [] // Will be populated by combination logic
         }));
-        console.log("Using fallback ingredient system");
+        console.log("✅ Using TRADITIONAL system:", ingredients.length, "unique ingredients");
+        console.log("Ingredient list:", ingredients);
       }
       
       base_ingredients = recipeData.baseIngredients; // Ensure base_ingredients is set for stats
@@ -1170,21 +1225,24 @@ let intermediate_combinations = [
       final_combination = recipeData.finalCombination;
       easter_eggs = recipeData.easterEggs;
       
-      // DUPLICATE INGREDIENT FIX: Use ingredient instances instead of deduplicated names
-      // This allows recipes to have multiple instances of the same ingredient
-      if (recipeData.baseIngredientInstances && recipeData.baseIngredientInstances.length > 0) {
-        ingredients = recipeData.baseIngredientInstances.map(inst => inst.name); // Create one vessel per instance
-        base_ingredient_instances = recipeData.baseIngredientInstances; // Store instances for combination logic
-        console.log("Using ingredient instances:", base_ingredient_instances.length, "instances");
+      // BUGFIX: Use validated ingredient system based on server flag
+      // Prevents duplicate vessel creation and ensures proper fallback behavior
+      if (recipeData.useInstanceSystem && recipeData.baseIngredientInstances && recipeData.baseIngredientInstances.length > 0) {
+        // Use the multi-instance system for recipes with duplicate ingredients
+        ingredients = recipeData.baseIngredientInstances.map(inst => inst.name);
+        base_ingredient_instances = recipeData.baseIngredientInstances;
+        console.log("✅ Using MULTI-INSTANCE system:", base_ingredient_instances.length, "ingredient instances");
+        console.log("Instance details:", base_ingredient_instances.map(inst => `${inst.name} (${inst.instanceId})`));
       } else {
-        // Fallback to old method for backward compatibility
-        ingredients = recipeData.baseIngredients;
-        base_ingredient_instances = recipeData.baseIngredients.map((name, index) => ({
+        // Use the traditional system for simple recipes
+        ingredients = recipeData.baseIngredients || [];
+        base_ingredient_instances = ingredients.map((name, index) => ({
           name: name,
-          instanceId: `${name}_fallback_${index}`,
+          instanceId: `${name}_traditional_${index}`,
           validCombos: [] // Will be populated by combination logic
         }));
-        console.log("Using fallback ingredient system");
+        console.log("✅ Using TRADITIONAL system:", ingredients.length, "unique ingredients");
+        console.log("Ingredient list:", ingredients);
       }
       
       base_ingredients = recipeData.baseIngredients; // Ensure base_ingredients is set for stats
@@ -1248,21 +1306,24 @@ let intermediate_combinations = [
       final_combination = recipeData.finalCombination;
       easter_eggs = recipeData.easterEggs;
       
-      // DUPLICATE INGREDIENT FIX: Use ingredient instances instead of deduplicated names
-      // This allows recipes to have multiple instances of the same ingredient
-      if (recipeData.baseIngredientInstances && recipeData.baseIngredientInstances.length > 0) {
-        ingredients = recipeData.baseIngredientInstances.map(inst => inst.name); // Create one vessel per instance
-        base_ingredient_instances = recipeData.baseIngredientInstances; // Store instances for combination logic
-        console.log("Using ingredient instances:", base_ingredient_instances.length, "instances");
+      // BUGFIX: Use validated ingredient system based on server flag
+      // Prevents duplicate vessel creation and ensures proper fallback behavior
+      if (recipeData.useInstanceSystem && recipeData.baseIngredientInstances && recipeData.baseIngredientInstances.length > 0) {
+        // Use the multi-instance system for recipes with duplicate ingredients
+        ingredients = recipeData.baseIngredientInstances.map(inst => inst.name);
+        base_ingredient_instances = recipeData.baseIngredientInstances;
+        console.log("✅ Using MULTI-INSTANCE system:", base_ingredient_instances.length, "ingredient instances");
+        console.log("Instance details:", base_ingredient_instances.map(inst => `${inst.name} (${inst.instanceId})`));
       } else {
-        // Fallback to old method for backward compatibility
-        ingredients = recipeData.baseIngredients;
-        base_ingredient_instances = recipeData.baseIngredients.map((name, index) => ({
+        // Use the traditional system for simple recipes
+        ingredients = recipeData.baseIngredients || [];
+        base_ingredient_instances = ingredients.map((name, index) => ({
           name: name,
-          instanceId: `${name}_fallback_${index}`,
+          instanceId: `${name}_traditional_${index}`,
           validCombos: [] // Will be populated by combination logic
         }));
-        console.log("Using fallback ingredient system");
+        console.log("✅ Using TRADITIONAL system:", ingredients.length, "unique ingredients");
+        console.log("Ingredient list:", ingredients);
       }
       
       base_ingredients = recipeData.baseIngredients; // Ensure base_ingredients is set for stats
