@@ -1438,15 +1438,10 @@ let firstInactivityMessageShown = false;
     if (!wallpaperAnimation) {
       wallpaperAnimation = new WallpaperAnimation();
       wallpaperAnimationActive = true; // Mark animation as active
-      console.log("🎭 Wallpaper split reveal animation created");
     }
     
-    // Update animation state
     wallpaperAnimation.update();
-    
-    // Check if loading is complete and we should start the split reveal
     if (loadingComplete && wallpaperAnimation.state === 'STATIC') {
-      console.log("🎬 Conditions met for split reveal - triggering animation!");
       wallpaperAnimation.startSplitReveal();
     } else if (wallpaperAnimation.state === 'STATIC') {
       console.log(`⏳ Waiting for loading completion - loadingComplete: ${loadingComplete}, state: ${wallpaperAnimation.state}`);
@@ -1455,22 +1450,32 @@ let firstInactivityMessageShown = false;
     // Draw the wallpaper wall (will be static, splitting, or complete)
     wallpaperAnimation.draw();
     
-    // Handle animation state transitions
     if (wallpaperAnimation.state === 'READY_FOR_COOK') {
-      // Initial loading complete - keep animation ready for cook transition
       console.log("🎯 Loading complete - wallpaper ready for cook transition");
+      return false; // Stop drawing wallpaper, but keep animation active
     } else if (wallpaperAnimation.state === 'COMPLETE') {
-      cleanupWallpaperAnimation();
+      if (wallpaperAnimation.closeStartTime !== null) {
+        // This should trigger the start screen display after wallpaper closes
+      }
       wallpaperAnimationActive = false; // Mark animation as inactive
-      console.log("🎉 Split reveal complete - transitioning to start screen");
+      console.log("🎉 Animation complete - ending wallpaper animation");
     }
   } else {
-    // Fallback loading messages while we wait for high-res image
+    // BUGFIX: Show loading message and continue if wallpaper fails
     fill(255);
     textAlign(CENTER, CENTER);
-    const messageSize = Math.max(playAreaWidth * 0.03, 12);
-    textSize(messageSize);
+    textSize(18);
     text("Loading wallpaper...", playAreaX + playAreaWidth/2, playAreaY + playAreaHeight/2 + 30);
+    
+    // BUGFIX: Add timeout fallback - if wallpaper hasn't loaded after reasonable time, continue anyway
+    if (!wallpaperLoadingStartTime) {
+      wallpaperLoadingStartTime = millis();
+    } else if (millis() - wallpaperLoadingStartTime > 8000) { // 8 second timeout
+      console.warn("⚠️ Wallpaper loading timeout reached - proceeding without animation");
+      wallpaperImageReady = false;
+      loadingComplete = true;
+      wallpaperLoadingStartTime = null; // Reset for future attempts
+    }
   }
 }
 

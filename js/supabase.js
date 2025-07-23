@@ -223,6 +223,29 @@ function processRecipeData(recipe, combinations, ingredients, easterEggs = []) {
   console.log("Base ingredient instances:", baseIngredientInstances);
   console.log("Unique base ingredient names:", baseIngredients);
   
+  // BUGFIX: Validate that we have ingredient instances before proceeding
+  // If no instances exist, create fallback instances to prevent empty arrays
+  let finalIngredientInstances = baseIngredientInstances;
+  if (baseIngredientInstances.length === 0 && baseIngredients.length > 0) {
+    console.log("⚠️ No ingredient instances found, creating fallback instances");
+    finalIngredientInstances = baseIngredients.map((name, index) => ({
+      name: name,
+      ing_id: `fallback_${index}`,
+      combo_id: null,
+      instanceId: `${name}_fallback_${index}`,
+      validCombos: [] // Will be populated by combination logic
+    }));
+  }
+  
+  // BUGFIX: Prevent duplicate ingredient processing
+  // Ensure we only use instances OR ingredients, never both
+  const useInstanceSystem = finalIngredientInstances.length > 0 && 
+    finalIngredientInstances.some(inst => inst.ing_id && inst.ing_id !== `fallback_${finalIngredientInstances.indexOf(inst)}`);
+  
+  console.log(`Using ${useInstanceSystem ? 'instance' : 'fallback'} ingredient system`);
+  console.log(`Final ingredient instances count: ${finalIngredientInstances.length}`);
+  console.log(`Deduplicated ingredients count: ${baseIngredients.length}`);
+  
   // Create maps for easier lookups
   const comboIdToName = {};
   const comboNameToId = {};
@@ -355,7 +378,8 @@ function processRecipeData(recipe, combinations, ingredients, easterEggs = []) {
     intermediateCombinations,
     finalCombination,
     baseIngredients: [...new Set(baseIngredients)], // Keep for backward compatibility
-    baseIngredientInstances, // DUPLICATE INGREDIENT FIX: Add ingredient instances for multi-instance support
+    baseIngredientInstances: finalIngredientInstances, // BUGFIX: Use validated instances
+    useInstanceSystem, // BUGFIX: Add flag to indicate which system to use
     easterEggs: easterEggs || [],
     description: recipe.description,
     author: recipe.author
