@@ -478,14 +478,101 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
           resultingCombo = matchingRecipe;
           isValidCombination = true;
         } else {
-          // No valid combination found
-          console.log("These vessels cannot be combined according to the recipe structure", "BUGSLIFE");
-          console.log("No matching recipe or parent-child relationship found for:", combinedSet, "BUGSLIFE");
-          console.log("Available intermediate combinations:", intermediate_combinations.map(c => ({ name: c.name, required: c.required, parent_combo: c.parent_combo, combo_id: c.combo_id })), "BUGSLIFE");
-          console.log("Final combination:", { name: final_combination.name, required: final_combination.required }, "BUGSLIFE");
-          console.log("vessel1Combo:", vessel1Combo, "BUGSLIFE");
-          console.log("vessel2Combo:", vessel2Combo, "BUGSLIFE");
-          return null;
+          // Enhanced check: Look for recipes that can be satisfied by the base ingredients of these combos
+          console.log("No direct recipe match found, checking if combos can form new recipe...", "BUGSLIFE");
+          
+          // Collect all base ingredients from both vessels
+          let allBaseIngredients = [];
+          
+          // Helper function to get base ingredients from a combo
+          const getBaseIngredients = (comboName) => {
+            const combo = intermediate_combinations.find(c => c.name === comboName);
+            if (!combo) return [];
+            
+            // If this combo has base ingredients in its required array, collect them
+            const baseIngs = [];
+            for (let req of combo.required) {
+              // Check if this required item is a base ingredient (not another combo)
+              const isCombo = intermediate_combinations.some(c => c.name === req);
+              if (!isCombo) {
+                baseIngs.push(req);
+              } else {
+                // Recursively get base ingredients from sub-combos
+                baseIngs.push(...getBaseIngredients(req));
+              }
+            }
+            return baseIngs;
+          };
+          
+          // Get base ingredients from both vessels
+          for (let comboName of combinedSet) {
+            allBaseIngredients.push(...getBaseIngredients(comboName));
+          }
+          
+          // Remove duplicates
+          allBaseIngredients = [...new Set(allBaseIngredients)];
+          
+          console.log("All base ingredients from combined combos:", allBaseIngredients, "BUGSLIFE");
+          
+          // Now check if any recipe can be satisfied by these base ingredients
+          const matchingRecipeByIngredients = intermediate_combinations.find(combo => {
+            // Skip recipes we've already completed
+            if (combinedSet.includes(combo.name)) return false;
+            
+            // Check if all required items for this recipe are satisfied
+            return combo.required.every(req => {
+              // If the required item is in our combined set, it's satisfied
+              if (combinedSet.includes(req)) return true;
+              
+              // If the required item is a base ingredient, check if we have it
+              const isBaseIngredient = !intermediate_combinations.some(c => c.name === req);
+              if (isBaseIngredient) {
+                return allBaseIngredients.includes(req);
+              }
+              
+              // If the required item is another combo, check if we can make it from our base ingredients
+              const reqComboBaseIngredients = getBaseIngredients(req);
+              return reqComboBaseIngredients.every(baseIng => allBaseIngredients.includes(baseIng));
+            });
+          });
+          
+          if (matchingRecipeByIngredients) {
+            console.log(`Found recipe that can be satisfied by combined ingredients: ${matchingRecipeByIngredients.name}`, "BUGSLIFE");
+            resultingCombo = matchingRecipeByIngredients;
+            isValidCombination = true;
+          } else {
+            // Also check if the final combination can be satisfied
+            const canMakeFinal = final_combination.required.every(req => {
+              // If the required item is in our combined set, it's satisfied
+              if (combinedSet.includes(req)) return true;
+              
+              // If the required item is a base ingredient, check if we have it
+              const isBaseIngredient = !intermediate_combinations.some(c => c.name === req);
+              if (isBaseIngredient) {
+                return allBaseIngredients.includes(req);
+              }
+              
+              // If the required item is another combo, check if we can make it from our base ingredients
+              const reqComboBaseIngredients = getBaseIngredients(req);
+              return reqComboBaseIngredients.every(baseIng => allBaseIngredients.includes(baseIng));
+            });
+            
+            if (canMakeFinal) {
+              console.log(`Found that combined ingredients can satisfy the final combination: ${final_combination.name}`, "BUGSLIFE");
+              resultingCombo = final_combination;
+              isValidCombination = true;
+            } else {
+              // No valid combination found
+              console.log("These vessels cannot be combined according to the recipe structure", "BUGSLIFE");
+              console.log("No matching recipe or parent-child relationship found for:", combinedSet, "BUGSLIFE");
+              console.log("All base ingredients available:", allBaseIngredients, "BUGSLIFE");
+              console.log("Available intermediate combinations:", intermediate_combinations.map(c => ({ name: c.name, required: c.required, parent_combo: c.parent_combo, combo_id: c.combo_id })), "BUGSLIFE");
+              console.log("Final combination:", { name: final_combination.name, required: final_combination.required }, "BUGSLIFE");
+              console.log("vessel1Combo:", vessel1Combo, "BUGSLIFE");
+              console.log("vessel2Combo:", vessel2Combo, "BUGSLIFE");
+              return null;
+            }
+          }
         }
       }
       
