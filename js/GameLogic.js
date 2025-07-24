@@ -1420,9 +1420,8 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
             let new_v = combineVessels(v1, v2);
             
             if (new_v) {
-              // Remove the original vessels
-              vessels.splice(vessels.indexOf(v1), 1);
-              vessels.splice(vessels.indexOf(v2), 1);
+              // Remove the original vessels safely
+              vessels = vessels.filter(v => v !== v1 && v !== v2);
               
               // Add the new vessel
               vessels.push(new_v);
@@ -1434,8 +1433,7 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
                 console.log("Using pulse animation for auto-combined intermediate vessel");
                 new_v.pulse(1000); // Increased from 500ms to 1000ms for calmer animation
               } else {
-                console.log("Using regular pulse for auto-combined intermediate vessel");
-                new_v.pulse(1000); // Increased from 500ms to 1000ms for calmer animation
+                console.warn("new_v.pulse is not a function, skipping pulse animation");
               }
               
               // Create verb animation for intermediate step
@@ -2214,10 +2212,22 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
     console.log("All items from vessels:", allItems);
     
     // Check for easter eggs
-    checkForEasterEgg(allItems.filter(item => {
-      return !intermediate_combinations.some(combo => combo.name === item) && 
-             item !== final_combination.name;
-    }));
+    if (typeof checkForEasterEgg === 'function' && easter_eggs && easter_eggs.length > 0) {
+        const filteredItems = allItems.filter(item => {
+            return !intermediate_combinations.some(combo => combo.name === item) && 
+                   item !== final_combination.name;
+        });
+        const eggMatch = checkForEasterEgg(filteredItems);
+        if (eggMatch) {
+            console.log("Found Easter egg match:", eggMatch.name);
+            // Since we're combining multiple vessels, we'll use the first two for the easter egg display
+            if (vesselsToMerge.length >= 2) {
+                displayEasterEgg(eggMatch, vesselsToMerge[0], vesselsToMerge[1]);
+            }
+            moveHistory.push({type: 'easterEgg'});
+            return null;
+        }
+    }
     
     // Expand items for final recipe matching
     const expandedItems = expandItemsForFinalRecipe(allItems);
@@ -2244,13 +2254,8 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
       finalVessel.positionStrength = 1.0;
       finalVessel.verb = final_combination.verb || "Complete!";
       
-      // Remove all merged vessels from the game
-      vesselsToMerge.forEach(v => {
-        const index = vessels.indexOf(v);
-        if (index > -1) {
-          vessels.splice(index, 1);
-        }
-      });
+      // Remove all merged vessels from the game safely
+      vessels = vessels.filter(v => !vesselsToMerge.includes(v));
       
       // Add the final vessel
       vessels.push(finalVessel);
