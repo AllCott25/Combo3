@@ -1779,18 +1779,22 @@ function mouseReleased() {
           // For green vessels (completed combinations), prioritize verb animation
           // But skip creating regular VerbAnimation if this is the final combo (we'll use FinalVerbAnimation instead)
           if (!isFinalCombination) {
-            console.log("Non-final combination - skipping verb animation");
+            console.log("Completed combination - using verb animation directly");
             
-            // Set the verb but don't create animation
+            // Check if the vessel has a verb
             if (new_v.verb) {
-              console.log("Vessel has verb:", new_v.verb, "but not creating animation");
+              console.log("Creating immediate verb animation for:", new_v.verb);
+              // Create verb animation starting exactly at the vessel's center
+              animations.push(new VerbAnimation(new_v.verb, new_v.x, new_v.y, new_v));
+              // Reset the verbDisplayTime to prevent duplicate animations
+              new_v.verbDisplayTime = 119; // Set to 119 instead of 120 to prevent creating another animation
             } else {
               // If no verb is set, use a default verb
               console.log("No verb found, using default verb");
               new_v.verb = "Mix";
+              new_v.verbDisplayTime = 119;
+              animations.push(new VerbAnimation(new_v.verb, new_v.x, new_v.y, new_v));
             }
-            // Set verbDisplayTime to 0 to prevent any animations
-            new_v.verbDisplayTime = 0;
           } else {
             console.log("Final combination detected - skipping regular verb animation");
             // Still set verbDisplayTime to prevent auto-animation
