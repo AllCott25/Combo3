@@ -2000,8 +2000,8 @@ function drawWallpaperAnimation() {
           console.log("STARTING AUTO FINAL COMBINATION SEQUENCE");
           autoFinalCombination = true;
           autoFinalCombinationStarted = true;
-          autoFinalCombinationTimer = 45; // Wait 1.5 seconds before starting the sequence
-          // Initialize state machine
+          autoFinalCombinationTimer = 30; // Wait 1 second before starting the sequence
+          // Set the state machine to WAITING
           autoFinalCombinationState = "WAITING";
           // Reset vessels array to ensure clean state
           finalCombinationVessels = [];
