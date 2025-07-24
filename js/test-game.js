@@ -18,7 +18,7 @@ let testState = {
 const TEST_CONFIG = {
     DEFAULT_TEST_USER: {
         email: 'test-user@combomeal.test',
-        password: 'testpass123'
+        password: 'CHANGE_THIS_PASSWORD' // Security: Update this in your local environment
     },
     TEST_ANONYMOUS_ID: 'anonymous-test-user',
     COMPLETION_SCENARIOS: [
