@@ -1838,7 +1838,7 @@ function mouseReleased() {
         } else {
           // Use regular pulse for yellow vessels (intermediate combinations)
           console.log("Using regular pulse for intermediate combination");
-          new_v.pulse(500); // Changed from 1000ms to 500ms (2x faster)
+          new_v.pulse(1000); // Increased from 500ms to 1000ms for consistency with auto-combination
         }
         
         // Debug log to verify flow before assigning preferred row

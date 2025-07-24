@@ -61,6 +61,30 @@ const { error } = await supabase.from('game_sessions').update(...)
 
 **Impact:** Ensures consistency between displayed stats and stored data, preventing discrepancies when network issues or database errors occur.
 
+## 2024-01-XX - Fixed Hyperactive Autocomplete Animation
+
+### Issue
+The autocomplete animation was triggering too quickly for non-final recipe combinations, especially when only two vessels remained to be combined. The animations were happening with "great speed" making the experience feel hyperactive.
+
+### Root Causes
+1. **State Machine Timing Issue**: The WAITING state was immediately transitioning to PENULTIMATE without properly checking the initial timer
+2. **Animation Detection**: The code was checking for verb animations at only 1% progress (0.01) instead of waiting for them to reach midpoint
+3. **Missing Animation Checks**: CombineAnimation (particle effects) weren't being checked, allowing the timer to count down during active animations
+4. **Short Timers**: The timers between combinations were too short (45 frames/1.5 seconds)
+5. **Fast Pulse Animation**: The pulse animation was only 500ms, contributing to the hyperactive feel
+
+### Fixes Applied
+1. **Fixed WAITING State**: Added proper timer check in WAITING state to respect the initial 45-frame delay
+2. **Improved Animation Detection**: Changed verb animation progress check from 0.01 to 0.5 (50%) to properly wait for animations
+3. **Added CombineAnimation Checks**: Now checking for active particle animations in both GameLogic.js and draw.js
+4. **Increased Timers**: 
+   - PENULTIMATE combinations: 45 → 90 frames (3 seconds)
+   - WAITING → PENULTIMATE transition: 20 → 30 frames (1 second)
+5. **Slowed Pulse Animation**: Increased pulse duration from 500ms to 1000ms for both auto and manual combinations
+
+### Result
+The autocomplete animation now has a more measured, deliberate pace that gives players time to see what's happening without feeling rushed or hyperactive.
+
 ## Testing Recommendations
 
 1. **Password Validation:** Test sign-up with various password combinations to ensure complexity requirements are enforced

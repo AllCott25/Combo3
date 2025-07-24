@@ -1296,15 +1296,19 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
     
     // Check if we have a verb animation that's at least 50% through (middle of animation)
     const hasVerbAtMidpoint = activeVerbAnimations.some(anim => 
-      anim.progress > 0.01); // Start at 50% progress instead of 70%
+      anim.progress > 0.5); // Changed from 0.01 to 0.5 - wait for animation to be actually halfway
     
     // Check if there are active vessel movement animations
     const hasActiveMovementAnimation = animations.some(anim => 
       anim instanceof VesselMovementAnimation && anim.active);
     
-    // If we have movement animations, wait for them to complete
-    if (hasActiveMovementAnimation) {
-      console.log("Waiting for vessel movements to complete before proceeding");
+    // Check if there are active combine animations (particles)
+    const hasActiveCombineAnimation = animations.some(anim => 
+      anim instanceof CombineAnimation && anim.active);
+    
+    // If we have movement animations or combine animations, wait for them to complete
+    if (hasActiveMovementAnimation || hasActiveCombineAnimation) {
+      console.log("Waiting for vessel movements or combine animations to complete before proceeding");
       return;
     }
     
@@ -1316,8 +1320,12 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
       case "WAITING":
         // This is the initial state - wait for the animations to settle
         console.log("AUTO COMBINATION STATE: WAITING");
+        // Check if initial wait timer has expired
+        if (autoFinalCombinationTimer > 0) {
+          return;
+        }
         autoFinalCombinationState = "PENULTIMATE";
-        autoFinalCombinationTimer = 20; // Wait before starting penultimate state
+        autoFinalCombinationTimer = 30; // Add additional wait before starting penultimate state (1 second)
         break;
         
       case "PENULTIMATE":
@@ -1328,6 +1336,11 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
         }
         
         console.log("AUTO COMBINATION STATE: PENULTIMATE");
+        
+        // Check if timer has expired
+        if (autoFinalCombinationTimer > 0) {
+          return;
+        }
         
         // If we only have the exact vessels needed for the final combination, move to next state
         if (isFinalCombinationReady()) {
@@ -1376,7 +1389,7 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
             } else {
               // Use regular pulse for intermediate combinations
               console.log("Using regular pulse for auto-combined intermediate vessel");
-              new_v.pulse(500); // Changed from 1500ms to 750ms (2x faster)
+              new_v.pulse(1000); // Increased from 500ms to 1000ms for calmer animation
             }
             
             // Create verb animation for intermediate step
@@ -1388,7 +1401,12 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
             }
             
             // Wait for the verb animation plus a little extra time before the next step
-            autoFinalCombinationTimer = 45; // 1.5 seconds at 30fps
+            // INCREASED TIMER: Changed from 45 to 90 frames (3 seconds at 30fps) for non-final combinations
+            autoFinalCombinationTimer = 90; // 3 seconds at 30fps
+            
+            // Add an extra state check to ensure we don't process too quickly
+            // This prevents the state machine from immediately processing again
+            return;
           } else {
             // If combination failed (shouldn't happen), move to next state
             console.error("Auto combination failed during penultimate phase");
