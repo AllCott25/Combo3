@@ -17,23 +17,15 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
         // Normalize items for comparison (trim whitespace, handle case)
         const normalizedItems = items.map(item => item.trim());
         
-        // Helper function to check if two arrays have the same elements
-        const arraysMatch = (arr1, arr2) => {
-            if (arr1.length !== arr2.length) return false;
-            const sorted1 = [...arr1].sort();
-            const sorted2 = [...arr2].sort();
-            return sorted1.every((item, index) => item === sorted2[index]);
-        };
-        
         // First check the final combination
-        if (arraysMatch(normalizedItems, final_combination.required)) {
+        if (arraysMatchExact(normalizedItems, final_combination.required)) {
             console.log("✓ Matched: Final combination!");
             return final_combination;
         }
         
         // Then check all intermediate combinations
         for (const combo of intermediate_combinations) {
-            if (arraysMatch(normalizedItems, combo.required)) {
+            if (arraysMatchExact(normalizedItems, combo.required)) {
                 console.log(`✓ Matched: ${combo.name}`);
                 return combo;
             }
@@ -210,6 +202,30 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
     }
     
     return items;
+  }
+  
+  // CENTRALIZED: Helper function to check if two arrays have the same elements
+  function arraysMatchExact(arr1, arr2) {
+    if (!arr1 || !arr2) return false;
+    if (arr1.length !== arr2.length) return false;
+    
+    // Normalize both arrays (trim whitespace, handle case)
+    const normalize = (item) => String(item).trim();
+    const sorted1 = arr1.map(normalize).sort();
+    const sorted2 = arr2.map(normalize).sort();
+    
+    return sorted1.every((item, index) => item === sorted2[index]);
+  }
+  
+  // DEBUG: Function to log detailed vessel state
+  function logVesselState(vessel, prefix = "") {
+    console.log(`${prefix}Vessel Debug Info:`);
+    console.log(`${prefix}  - Name: ${vessel.name || "None"}`);
+    console.log(`${prefix}  - Color: ${vessel.color}`);
+    console.log(`${prefix}  - Ingredients: [${vessel.ingredients.join(", ")}]`);
+    console.log(`${prefix}  - Complete Combinations: [${vessel.complete_combinations.join(", ")}]`);
+    console.log(`${prefix}  - All Items: [${getAllItemsFromVessel(vessel).join(", ")}]`);
+    console.log(`${prefix}  - Position: (${Math.round(vessel.x)}, ${Math.round(vessel.y)})`);
   }
   
   // Function to check if hints are available
@@ -1702,6 +1718,12 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
   function findBestVesselPair() {
     console.log("=== FINDING BEST VESSEL PAIR ===");
     console.log("Current vessels:", vessels.map(v => v.name || v.ingredients.join("+")));
+    console.log("Total vessels available:", vessels.length);
+    
+    // Log detailed state of each vessel
+    vessels.forEach((v, index) => {
+      logVesselState(v, `  [${index}] `);
+    });
     
     // Try to find a valid combination among current vessels
     for (let i = 0; i < vessels.length; i++) {
@@ -1710,27 +1732,25 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
         const v2 = vessels[j];
         
         // Get all items from both vessels
-        const allItems = [...new Set([...getAllItemsFromVessel(v1), ...getAllItemsFromVessel(v2)])];
-        console.log(`Testing combination: [${getAllItemsFromVessel(v1).join(", ")}] + [${getAllItemsFromVessel(v2).join(", ")}] = [${allItems.join(", ")}]`);
+        const items1 = getAllItemsFromVessel(v1);
+        const items2 = getAllItemsFromVessel(v2);
+        const allItems = [...new Set([...items1, ...items2])];
         
-        // Helper function to check if two arrays have the same elements
-        const arraysMatch = (arr1, arr2) => {
-            if (arr1.length !== arr2.length) return false;
-            const sorted1 = [...arr1].sort();
-            const sorted2 = [...arr2].sort();
-            return sorted1.every((item, index) => item === sorted2[index]);
-        };
+        console.log(`\nTesting pair ${i} + ${j}:`);
+        console.log(`  Vessel ${i}: [${items1.join(", ")}]`);
+        console.log(`  Vessel ${j}: [${items2.join(", ")}]`);
+        console.log(`  Combined: [${allItems.join(", ")}]`);
         
         // Check if this combination would result in a valid recipe
         // First check the final combination
-        if (arraysMatch(allItems, final_combination.required)) {
+        if (arraysMatchExact(allItems, final_combination.required)) {
           console.log("✓ Found valid pair for final combination!");
           return [v1, v2];
         }
         
         // Then check all intermediate combinations
         for (const combo of intermediate_combinations) {
-          if (arraysMatch(allItems, combo.required)) {
+          if (arraysMatchExact(allItems, combo.required)) {
             console.log(`✓ Found valid pair for ${combo.name}!`);
             return [v1, v2];
           }
@@ -1748,17 +1768,39 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
     }
     
     // If no valid combination found, log what we have and what recipes expect
-    console.log("✗ No valid vessel pair found!");
-    console.log("Available vessel contents:");
+    console.log("\n✗ No valid vessel pair found!");
+    console.log("\nDETAILED DIAGNOSTIC INFO:");
+    console.log("========================");
+    
+    // Log current game state
+    console.log("\nGame State:");
+    console.log(`  - Game Won: ${gameWon}`);
+    console.log(`  - Completed Combos: [${completedCombos.join(", ")}]`);
+    console.log(`  - Partial Combos: [${partialCombinations.join(", ")}]`);
+    console.log(`  - Started Combos: [${startedCombinations.join(", ")}]`);
+    
+    // Log all available items
+    const allAvailableItems = [];
     vessels.forEach(v => {
-      const items = getAllItemsFromVessel(v);
-      console.log(`  - ${v.name || "Unnamed"}: [${items.join(", ")}]`);
+      allAvailableItems.push(...getAllItemsFromVessel(v));
     });
-    console.log("Recipe requirements:");
-    intermediate_combinations.forEach(combo => {
-      console.log(`  - ${combo.name}: [${combo.required.join(", ")}]`);
+    console.log(`\nAll available items in game: [${[...new Set(allAvailableItems)].join(", ")}]`);
+    
+    // Check which recipes could potentially be made
+    console.log("\nRecipe Analysis:");
+    const allCombos = [...intermediate_combinations, final_combination];
+    allCombos.forEach(combo => {
+      const required = combo.required;
+      const available = required.filter(req => allAvailableItems.includes(req));
+      const missing = required.filter(req => !allAvailableItems.includes(req));
+      
+      console.log(`\n  ${combo.name}:`);
+      console.log(`    Required: [${required.join(", ")}]`);
+      console.log(`    Available: [${available.join(", ")}] (${available.length}/${required.length})`);
+      if (missing.length > 0) {
+        console.log(`    Missing: [${missing.join(", ")}]`);
+      }
     });
-    console.log(`  - ${final_combination.name}: [${final_combination.required.join(", ")}]`);
     
     return null;
   }
