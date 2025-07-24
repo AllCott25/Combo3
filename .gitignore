@@ -1,0 +1,19 @@
+# Configuration files with sensitive data
+js/config.js
+.env
+.env.local
+
+# Node modules (if using build tools)
+node_modules/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+.vscode/
+.idea/
+
+# Build output
+dist/
+build/

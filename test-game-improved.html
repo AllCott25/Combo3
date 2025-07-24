@@ -814,7 +814,7 @@
         async function loginTestUser() {
             try {
                 const testEmail = 'test-user@combomeal.test';
-                const testPassword = 'testpass123';
+                const testPassword = 'CHANGE_THIS_PASSWORD'; // Security: Update this in your local environment
                 
                 const { data, error } = await supabase.auth.signInWithPassword({
                     email: testEmail,

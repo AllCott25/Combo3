@@ -2,8 +2,15 @@
 // This file handles fetching recipe data from Supabase
 
 // Initialize Supabase client
-const SUPABASE_URL = 'https://ovrvtfjejmhrflybslwi.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im92cnZ0Zmplam1ocmZseWJzbHdpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDEwNDkxMDgsImV4cCI6MjA1NjYyNTEwOH0.V5_pJUQN9Xhd-Ot4NABXzxSVHGtNYNFuLMWE1JDyjAk';
+// SECURITY: These should be loaded from environment variables, not hardcoded
+// The anon key is safe to expose as it only grants access based on Row Level Security policies
+const SUPABASE_URL = window.SUPABASE_URL || 'YOUR_SUPABASE_URL_HERE';
+const SUPABASE_KEY = window.SUPABASE_ANON_KEY || 'YOUR_SUPABASE_ANON_KEY_HERE';
+
+// Validate that credentials are properly configured
+if (SUPABASE_URL === 'YOUR_SUPABASE_URL_HERE' || SUPABASE_KEY === 'YOUR_SUPABASE_ANON_KEY_HERE') {
+  console.error('SECURITY WARNING: Supabase credentials not properly configured. Please set up environment variables.');
+}
 
 // Create a single supabase client for interacting with your database
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);

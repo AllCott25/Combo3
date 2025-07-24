@@ -194,7 +194,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// Handle Login
+// Handle Login with enhanced security
 async function handleLogin(e) {
     e.preventDefault();
     
@@ -202,17 +202,17 @@ async function handleLogin(e) {
     const password = document.getElementById('password').value;
     
     try {
-        const { data, error } = await supabase.auth.signInWithPassword({
-            email,
-            password
-        });
+        // Use AdminAuth for secure login
+        const result = await AdminAuth.adminLogin(email, password);
         
-        if (error) throw error;
-        
-        showAdminPanel();
-        loadFormData();
+        if (result.success) {
+            showAdminPanel();
+            loadFormData();
+            loginError.textContent = '';
+        }
     } catch (error) {
         loginError.textContent = `Login failed: ${error.message}`;
+        console.error('Admin login error:', error);
     }
 }
 
@@ -984,15 +984,8 @@ function formatMessageDate(date) {
     });
 }
 
-// Escape HTML to prevent XSS
-function escapeHtml(unsafe) {
-    return unsafe
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
-}
+// Use SecurityUtils for HTML escaping
+const escapeHtml = SecurityUtils.escapeHtml;
 
 // Toggle Recipe Details
 function toggleRecipeDetails(headerElement) {
