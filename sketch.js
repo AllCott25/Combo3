@@ -290,7 +290,7 @@ let intermediate_combinations = [
     
     update() {
       // Scale animation only (removed floating animation)
-      this.scale = lerp(this.scale, this.targetScale, 0.2);
+      this.scale = lerp(this.scale, this.targetScale, 0.35);
     }
     
     draw() {
