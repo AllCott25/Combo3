@@ -2020,10 +2020,14 @@ function drawWallpaperAnimation() {
         const hasActiveMovementAnimation = animations.some(anim => 
           anim instanceof VesselMovementAnimation && anim.active);
         
+        // Check for active combine animations (particle effects)
+        const hasActiveCombineAnimation = animations.some(anim => 
+          anim instanceof CombineAnimation && anim.active);
+        
         // Only decrement the timer if there are no active animations that would affect timing
-        if (autoFinalCombinationTimer > 0 && !hasActiveVerbAnimation && !hasActiveMovementAnimation) {
+        if (autoFinalCombinationTimer > 0 && !hasActiveVerbAnimation && !hasActiveMovementAnimation && !hasActiveCombineAnimation) {
           autoFinalCombinationTimer--;
-        } else if (autoFinalCombinationTimer <= 0 && !hasActiveVerbAnimation && !hasActiveMovementAnimation) {
+        } else if (autoFinalCombinationTimer <= 0 && !hasActiveVerbAnimation && !hasActiveMovementAnimation && !hasActiveCombineAnimation) {
           // Only trigger the next step in the sequence if there are no active animations
           processAutoFinalCombination();
         }
