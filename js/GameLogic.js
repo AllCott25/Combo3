@@ -103,7 +103,12 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
                               newVesselX, newVesselY, vesselWidth, vesselHeight);
             
             new_v.verb = recipe.verb || "Mix";
-            new_v.verbDisplayTime = 120;
+            // Only set verbDisplayTime for final recipe
+            if (final_combination && recipe.name === final_combination.name) {
+                new_v.verbDisplayTime = 120;
+            } else {
+                new_v.verbDisplayTime = 0;
+            }
             
             // Add to completedGreenVessels
             if (!completedGreenVessels.some(vessel => vessel.name === recipe.name)) {
@@ -1393,11 +1398,9 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
             }
             
             // Create verb animation for intermediate step
-            if (new_v.verb) {
-              console.log("Creating verb animation for intermediate step:", new_v.verb);
+            if (new_v.verb && final_combination && new_v.name === final_combination.name) {
               animations.push(new VerbAnimation(new_v.verb, new_v.x, new_v.y, new_v));
-              // Reset verbDisplayTime to prevent duplicate animations
-              new_v.verbDisplayTime = 0;
+              new_v.verbDisplayTime = 119; // Prevent duplicate animations
             }
             
             // Wait for the verb animation plus a little extra time before the next step
@@ -1707,8 +1710,8 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
             // Use bounce pulse for the newly created combination
             newVessel.bouncePulse();
             
-            // Create verb animation
-            if (newVessel.verb) {
+            // Create verb animation ONLY for final recipe combo
+            if (newVessel.verb && final_combination && newVessel.name === final_combination.name) {
               animations.push(new VerbAnimation(newVessel.verb, newVessel.x, newVessel.y, newVessel));
               newVessel.verbDisplayTime = 119; // Prevent duplicate animations
             }
@@ -1832,8 +1835,8 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
                 // Use bounce pulse for the newly created combination
                 newVessel.bouncePulse();
                 
-                // Create verb animation
-                if (newVessel.verb) {
+                // Create verb animation ONLY for final recipe combo
+                if (newVessel.verb && final_combination && newVessel.name === final_combination.name) {
                   animations.push(new VerbAnimation(newVessel.verb, newVessel.x, newVessel.y, newVessel));
                   newVessel.verbDisplayTime = 119; // Prevent duplicate animations
                 }

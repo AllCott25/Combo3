@@ -2703,12 +2703,12 @@ function drawWallpaperAnimation() {
       console.log("No verb found, using default verb 'Mix'");
     }
     
-    // Create the animation directly instead of waiting for displayVerb to be called
-    console.log("Creating immediate verb animation for:", vessel.verb, "at position", vessel.x, vessel.y);
-    animations.push(new VerbAnimation(vessel.verb, vessel.x, vessel.y, vessel));
+    // Don't create verb animation for non-final combos
+    // Only the final combo should show the autocomplete animation
+    console.log("Not creating verb animation for non-final vessel:", vessel.name);
     
-    // Set verbDisplayTime to 119 to prevent duplicate animations from displayVerb()
-    vessel.verbDisplayTime = 119;
+    // Set verbDisplayTime to 0 to prevent any animation from displayVerb()
+    vessel.verbDisplayTime = 0;
     
     return true;
   }
