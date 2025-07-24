@@ -1725,6 +1725,42 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
       logVesselState(v, `  [${index}] `);
     });
     
+    // Special handling for final combination scenarios
+    // Check if we have a partial final combination that needs one more ingredient
+    for (let i = 0; i < vessels.length; i++) {
+      const vessel = vessels[i];
+      
+      // Check if this vessel contains partial final combination items
+      const vesselItems = getAllItemsFromVessel(vessel);
+      
+      // Count how many final recipe components this vessel has
+      let finalComponentsInVessel = vesselItems.filter(item => 
+        final_combination.required.includes(item)
+      );
+      
+      // If this vessel has some (but not all) final components, look for the missing pieces
+      if (finalComponentsInVessel.length > 0 && finalComponentsInVessel.length < final_combination.required.length) {
+        console.log(`\nVessel ${i} has partial final components: [${finalComponentsInVessel.join(", ")}]`);
+        
+        // Check other vessels for the missing components
+        for (let j = 0; j < vessels.length; j++) {
+          if (i === j) continue;
+          
+          const otherVesselItems = getAllItemsFromVessel(vessels[j]);
+          const combinedItems = [...new Set([...vesselItems, ...otherVesselItems])];
+          
+          // Check if combining these would complete the final recipe
+          if (arraysMatchExact(combinedItems, final_combination.required)) {
+            console.log(`✓ Found pair that completes final combination!`);
+            console.log(`  Vessel ${i}: [${vesselItems.join(", ")}]`);
+            console.log(`  Vessel ${j}: [${otherVesselItems.join(", ")}]`);
+            return [vessel, vessels[j]];
+          }
+        }
+      }
+    }
+    
+    // Standard combination logic
     // Try to find a valid combination among current vessels
     for (let i = 0; i < vessels.length; i++) {
       for (let j = i + 1; j < vessels.length; j++) {
