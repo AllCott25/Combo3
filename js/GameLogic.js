@@ -1390,67 +1390,75 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
           autoFinalCombinationState = "ANIMATE";
           autoFinalCombinationTimer = 10; // Reduced from 15 - Small delay before animation
         } else if (vessels.length >= 2) {
-          // Still need to make more combinations - identify the next vessels to combine
-          const vesselPair = findBestVesselPair();
+          // First check if we can do the final combination with multiple vessels
+          const finalVessels = findVesselsForFinalCombination();
           
-          if (!vesselPair) {
-            console.error("No valid vessel combination found during auto sequence");
-            autoFinalCombination = false;
-            return;
-          }
-          
-          let [v1, v2] = vesselPair;
-          
-          // Create animation to move vessels toward each other
-          animations.push(new CombineAnimation(v1.x, v1.y, v1.color, (v1.x + v2.x) / 2, (v1.y + v2.y) / 2));
-          animations.push(new CombineAnimation(v2.x, v2.y, v2.color, (v1.x + v2.x) / 2, (v1.y + v2.y) / 2));
-          
-          // Combine the vessels
-          let new_v = combineVessels(v1, v2);
-          
-          if (new_v) {
-            // ENHANCEMENT - APlasker - Mark as newly combined for position persistence
-            new_v.isNewlyCombined = true;
-            
-            // Remove the original vessels
-            vessels = vessels.filter(v => v !== v1 && v !== v2);
-            
-            // Add the new vessel
-            vessels.push(new_v);
-            
-            // Arrange vessels for visual clarity
-            arrangeVessels();
-            
-            // Use appropriate pulse animation based on vessel type
-            if (new_v.color === COLORS.green || new_v.color === COLORS.vesselGreen || new_v.color === COLORS.primary || COMPLETED_VESSEL_COLORS.includes(new_v.color)) {
-              console.log("Using bounce pulse for auto-combined completed vessel");
-              new_v.bouncePulse(); // Use new bounce pulse animation
-            } else {
-              // Use regular pulse for intermediate combinations
-              console.log("Using regular pulse for auto-combined intermediate vessel");
-              new_v.pulse(1000); // Increased from 500ms to 1000ms for calmer animation
-            }
-            
-            // Create verb animation for intermediate step
-            if (new_v.verb) {
-              console.log("Creating verb animation for intermediate step:", new_v.verb);
-              animations.push(new VerbAnimation(new_v.verb, new_v.x, new_v.y, new_v));
-              // Reset verbDisplayTime to prevent duplicate animations
-              new_v.verbDisplayTime = 0;
-            }
-            
-            // Wait for the verb animation plus a little extra time before the next step
-            // INCREASED TIMER: Changed from 45 to 90 frames (3 seconds at 30fps) for non-final combinations
-            autoFinalCombinationTimer = 90; // 3 seconds at 30fps
-            
-            // Add an extra state check to ensure we don't process too quickly
-            // This prevents the state machine from immediately processing again
-            return;
-          } else {
-            // If combination failed (shouldn't happen), move to next state
-            console.error("Auto combination failed during penultimate phase");
+          if (finalVessels && finalVessels.length > 2) {
+            console.log(`Found ${finalVessels.length} vessels needed for final combination!`);
+            // We have all vessels needed for final combination but it requires more than 2
+            // Move directly to animate state with these vessels
+            finalCombinationVessels = finalVessels;
             autoFinalCombinationState = "ANIMATE";
-            autoFinalCombinationTimer = 15; // Reduced from 20 - Wait before starting animation
+            autoFinalCombinationTimer = 10;
+          } else if (vessels.length >= 2) {
+            // Still need to make more combinations - identify the next vessels to combine
+            const vesselPair = findBestVesselPair();
+            
+            if (!vesselPair) {
+              console.error("No valid vessel combination found during auto sequence");
+              autoFinalCombination = false;
+              return;
+            }
+            
+            let [v1, v2] = vesselPair;
+            
+            // Create animation to move vessels toward each other
+            animations.push(new CombineAnimation(v1.x, v1.y, v1.color, (v1.x + v2.x) / 2, (v1.y + v2.y) / 2));
+            animations.push(new CombineAnimation(v2.x, v2.y, v2.color, (v1.x + v2.x) / 2, (v1.y + v2.y) / 2));
+            
+            // Combine the vessels
+            let new_v = combineVessels(v1, v2);
+            
+            if (new_v) {
+              // Remove the original vessels
+              vessels.splice(vessels.indexOf(v1), 1);
+              vessels.splice(vessels.indexOf(v2), 1);
+              
+              // Add the new vessel
+              vessels.push(new_v);
+              
+              console.log("Auto-combined intermediate vessels. New vessel:", new_v.name || "unnamed");
+              
+              // Pulse the new vessel (calmer animation than shake)
+              if (typeof new_v.pulse === 'function') {
+                console.log("Using pulse animation for auto-combined intermediate vessel");
+                new_v.pulse(1000); // Increased from 500ms to 1000ms for calmer animation
+              } else {
+                console.log("Using regular pulse for auto-combined intermediate vessel");
+                new_v.pulse(1000); // Increased from 500ms to 1000ms for calmer animation
+              }
+              
+              // Create verb animation for intermediate step
+              if (new_v.verb) {
+                console.log("Creating verb animation for intermediate step:", new_v.verb);
+                animations.push(new VerbAnimation(new_v.verb, new_v.x, new_v.y, new_v));
+                // Reset verbDisplayTime to prevent duplicate animations
+                new_v.verbDisplayTime = 0;
+              }
+              
+              // Wait for the verb animation plus a little extra time before the next step
+              // INCREASED TIMER: Changed from 45 to 90 frames (3 seconds at 30fps) for non-final combinations
+              autoFinalCombinationTimer = 90; // 3 seconds at 30fps
+              
+              // Add an extra state check to ensure we don't process too quickly
+              // This prevents the state machine from immediately processing again
+              return;
+            } else {
+              // If combination failed (shouldn't happen), move to next state
+              console.error("Auto combination failed during penultimate phase");
+              autoFinalCombinationState = "ANIMATE";
+              autoFinalCombinationTimer = 15; // Reduced from 20 - Wait before starting animation
+            }
           }
         } else {
           // If we have fewer than 2 vessels and aren't ready, something went wrong
@@ -1906,3 +1914,524 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
     
     return null;
   }
+
+  // NEW: Helper function to find ALL vessels needed for final combination
+  function findVesselsForFinalCombination() {
+    console.log("=== FINDING VESSELS FOR FINAL COMBINATION ===");
+    console.log("Current vessels:", vessels.map(v => v.name || v.ingredients.join("+")));
+    console.log("Final recipe requires:", final_combination.required);
+    
+    // Get all available items from all vessels
+    let allAvailableItems = [];
+    let vesselItemsMap = new Map(); // Map to track which items come from which vessels
+    
+    vessels.forEach((vessel, index) => {
+      const items = getAllItemsFromVessel(vessel);
+      items.forEach(item => {
+        allAvailableItems.push(item);
+        if (!vesselItemsMap.has(item)) {
+          vesselItemsMap.set(item, []);
+        }
+        vesselItemsMap.get(item).push(index);
+      });
+    });
+    
+    // Expand combos into their base ingredients if needed
+    const expandedItems = expandItemsForFinalRecipe(allAvailableItems);
+    
+    // Check if we have all required items for final combination
+    const hasAllRequired = final_combination.required.every(req => 
+      expandedItems.includes(req)
+    );
+    
+    if (!hasAllRequired) {
+      console.log("Not all required items available for final combination");
+      return null;
+    }
+    
+    // Find the minimal set of vessels that contains all required items
+    let requiredVesselIndices = new Set();
+    
+    // For each required item, we need at least one vessel that contains it
+    for (const reqItem of final_combination.required) {
+      let found = false;
+      
+      // First check if any vessel has this item directly
+      for (let i = 0; i < vessels.length; i++) {
+        const vesselItems = getAllItemsFromVessel(vessels[i]);
+        if (vesselItems.includes(reqItem)) {
+          requiredVesselIndices.add(i);
+          found = true;
+          break;
+        }
+      }
+      
+      // If not found directly, check if any vessel has a combo that expands to include this item
+      if (!found) {
+        for (let i = 0; i < vessels.length; i++) {
+          const vesselItems = getAllItemsFromVessel(vessels[i]);
+          const expanded = expandItemsForFinalRecipe(vesselItems);
+          if (expanded.includes(reqItem)) {
+            requiredVesselIndices.add(i);
+            found = true;
+            break;
+          }
+        }
+      }
+      
+      if (!found) {
+        console.log(`Required item ${reqItem} not found in any vessel`);
+        return null;
+      }
+    }
+    
+    // Get the vessels at these indices
+    const selectedVessels = Array.from(requiredVesselIndices).map(i => vessels[i]);
+    
+    // Verify that the selected vessels contain exactly what we need
+    let selectedItems = [];
+    selectedVessels.forEach(v => {
+      selectedItems.push(...getAllItemsFromVessel(v));
+    });
+    
+    const expandedSelectedItems = expandItemsForFinalRecipe(selectedItems);
+    
+    // Check if we have exactly the final combination
+    if (arraysMatchExact(expandedSelectedItems, final_combination.required)) {
+      console.log(`✓ Found ${selectedVessels.length} vessels for final combination!`);
+      selectedVessels.forEach((v, i) => {
+        console.log(`  Vessel ${i}: [${getAllItemsFromVessel(v).join(", ")}]`);
+      });
+      return selectedVessels;
+    }
+    
+    // If we have extra items, it might still be valid if we need all vessels
+    // This handles cases where vessels contain partial combinations
+    console.log("Selected vessels contain extra items, checking if all vessels are needed...");
+    
+    // Return all vessels if they collectively match the final recipe
+    const allVesselItems = [];
+    vessels.forEach(v => {
+      allVesselItems.push(...getAllItemsFromVessel(v));
+    });
+    
+    const allExpanded = expandItemsForFinalRecipe(allVesselItems);
+    if (arraysMatchExact(allExpanded, final_combination.required)) {
+      console.log(`✓ All ${vessels.length} vessels needed for final combination!`);
+      return vessels;
+    }
+    
+    console.log("Could not find exact vessel combination for final recipe");
+    return null;
+  }
+
+  // Helper function to find the best pair of vessels to combine
+  function findBestVesselPair() {
+    console.log("=== FINDING BEST VESSEL PAIR ===");
+    console.log("Current vessels:", vessels.map(v => v.name || v.ingredients.join("+")));
+    console.log("Total vessels available:", vessels.length);
+    
+    // Define required variables
+    const completedCombos = vessels
+      .filter(v => v.name && v.ingredients.length === 0)
+      .map(v => v.name);
+    const partialCombinations = [];
+    const startedCombinations = [];
+    
+    // Collect partial and started combinations
+    vessels.forEach(v => {
+      if (v.complete_combinations) {
+        partialCombinations.push(...v.complete_combinations);
+      }
+      if (v.started_combinations) {
+        startedCombinations.push(...v.started_combinations);
+      }
+    });
+    
+    // Log detailed state of each vessel
+    vessels.forEach((v, index) => {
+      logVesselState(v, `  [${index}] `);
+    });
+    
+    // Special handling for final combination scenarios
+    // Check if we have a partial final combination that needs one more ingredient
+    for (let i = 0; i < vessels.length; i++) {
+      const vessel = vessels[i];
+      
+      // Check if this vessel contains partial final combination items
+      const vesselItems = getAllItemsFromVessel(vessel);
+      
+      // Count how many final recipe components this vessel has
+      let finalComponentsInVessel = vesselItems.filter(item => 
+        final_combination.required.includes(item)
+      );
+      
+      // If this vessel has some (but not all) final components, look for the missing pieces
+      if (finalComponentsInVessel.length > 0 && finalComponentsInVessel.length < final_combination.required.length) {
+        console.log(`\nVessel ${i} has partial final components: [${finalComponentsInVessel.join(", ")}]`);
+        
+        // Check other vessels for the missing components
+        for (let j = 0; j < vessels.length; j++) {
+          if (i === j) continue;
+          
+          const otherVesselItems = getAllItemsFromVessel(vessels[j]);
+          const combinedItems = [...new Set([...vesselItems, ...otherVesselItems])];
+          
+          // Check if combining these would complete the final recipe
+          if (arraysMatchExact(combinedItems, final_combination.required)) {
+            console.log(`✓ Found pair that completes final combination!`);
+            console.log(`  Vessel ${i}: [${vesselItems.join(", ")}]`);
+            console.log(`  Vessel ${j}: [${otherVesselItems.join(", ")}]`);
+            return [vessel, vessels[j]];
+          }
+          
+          // Also check with expanded items
+          const expandedCombined = expandItemsForFinalRecipe(combinedItems);
+          if (arraysMatchExact(expandedCombined, final_combination.required)) {
+            console.log(`✓ Found pair that completes final combination (after expansion)!`);
+            console.log(`  Vessel ${i}: [${vesselItems.join(", ")}]`);
+            console.log(`  Vessel ${j}: [${otherVesselItems.join(", ")}]`);
+            console.log(`  Expanded: [${expandedCombined.join(", ")}]`);
+            return [vessel, vessels[j]];
+          }
+        }
+      }
+    }
+    
+    // Standard combination logic
+    // Try to find a valid combination among current vessels
+    for (let i = 0; i < vessels.length; i++) {
+      for (let j = i + 1; j < vessels.length; j++) {
+        const v1 = vessels[i];
+        const v2 = vessels[j];
+        
+        // Get all items from both vessels
+        const items1 = getAllItemsFromVessel(v1);
+        const items2 = getAllItemsFromVessel(v2);
+        const allItems = [...new Set([...items1, ...items2])];
+        
+        console.log(`\nTesting pair ${i} + ${j}:`);
+        console.log(`  Vessel ${i}: [${items1.join(", ")}]`);
+        console.log(`  Vessel ${j}: [${items2.join(", ")}]`);
+        console.log(`  Combined: [${allItems.join(", ")}]`);
+        
+        // Check if this combination would result in a valid recipe
+        // First check the final combination
+        if (arraysMatchExact(allItems, final_combination.required)) {
+          console.log("✓ Found valid pair for final combination!");
+          return [v1, v2];
+        }
+        
+        // Also check if expanding combos into ingredients would match final recipe
+        const expandedItems = expandItemsForFinalRecipe(allItems);
+        console.log(`  Expanded: [${expandedItems.join(", ")}]`);
+        
+        if (arraysMatchExact(expandedItems, final_combination.required)) {
+          console.log("✓ Found valid pair for final combination (after expansion)!");
+          return [v1, v2];
+        }
+        
+        // Then check all intermediate combinations
+        for (const combo of intermediate_combinations) {
+          if (arraysMatchExact(allItems, combo.required)) {
+            console.log(`✓ Found valid pair for ${combo.name}!`);
+            return [v1, v2];
+          }
+        }
+        
+        // Also check for partial matches that would progress toward a recipe
+        for (const combo of intermediate_combinations.concat([final_combination])) {
+          if (allItems.every(item => combo.required.includes(item)) && 
+              allItems.length < combo.required.length) {
+            console.log(`✓ Found valid partial match for ${combo.name}`);
+            return [v1, v2];
+          }
+        }
+      }
+    }
+    
+    // If no valid combination found, log what we have and what recipes expect
+    console.log("\n✗ No valid vessel pair found!");
+    console.log("\nDETAILED DIAGNOSTIC INFO:");
+    console.log("========================");
+    
+    // Log current game state
+    console.log("\nGame State:");
+    console.log(`  - Game Won: ${gameWon}`);
+    console.log(`  - Completed Combos: [${completedCombos.join(", ")}]`);
+    console.log(`  - Partial Combos: [${partialCombinations.join(", ")}]`);
+    console.log(`  - Started Combos: [${startedCombinations.join(", ")}]`);
+    
+    // Log all available items
+    const allAvailableItems = [];
+    vessels.forEach(v => {
+      allAvailableItems.push(...getAllItemsFromVessel(v));
+    });
+    console.log(`\nAll available items in game: [${[...new Set(allAvailableItems)].join(", ")}]`);
+    
+    // Check which recipes could potentially be made
+    console.log("\nRecipe Analysis:");
+    const allCombos = [...intermediate_combinations, final_combination];
+    allCombos.forEach(combo => {
+      const required = combo.required;
+      const available = required.filter(req => allAvailableItems.includes(req));
+      const missing = required.filter(req => !allAvailableItems.includes(req));
+      
+      console.log(`\n  ${combo.name}:`);
+      console.log(`    Required: [${required.join(", ")}]`);
+      console.log(`    Available: [${available.join(", ")}] (${available.length}/${required.length})`);
+      if (missing.length > 0) {
+        console.log(`    Missing: [${missing.join(", ")}]`);
+      }
+    });
+    
+    return null;
+  }
+
+  // NEW: Function to combine multiple vessels at once (for final combinations)
+  function combineMultipleVessels(vesselsToMerge, centerX = null, centerY = null) {
+    console.log("=== COMBINING MULTIPLE VESSELS ===");
+    console.log(`Combining ${vesselsToMerge.length} vessels:`, vesselsToMerge.map(v => v.name || v.ingredients.join("+")));
+    
+    // Calculate center position if not provided
+    if (centerX === null || centerY === null) {
+      centerX = 0;
+      centerY = 0;
+      vesselsToMerge.forEach(v => {
+        centerX += v.x;
+        centerY += v.y;
+      });
+      centerX /= vesselsToMerge.length;
+      centerY /= vesselsToMerge.length;
+    }
+    
+    // Collect all items from all vessels
+    let allItems = [];
+    vesselsToMerge.forEach(v => {
+      allItems.push(...getAllItemsFromVessel(v));
+    });
+    
+    console.log("All items from vessels:", allItems);
+    
+    // Check for easter eggs
+    checkForEasterEgg(allItems.filter(item => {
+      return !intermediate_combinations.some(combo => combo.name === item) && 
+             item !== final_combination.name;
+    }));
+    
+    // Expand items for final recipe matching
+    const expandedItems = expandItemsForFinalRecipe(allItems);
+    console.log("Expanded items:", expandedItems);
+    
+    // Check if this matches the final combination
+    if (arraysMatchExact(expandedItems, final_combination.required)) {
+      console.log("✓ Creating final combination vessel!");
+      
+      // Create the final vessel
+      let finalVessel = new Vessel(
+        [], // No ingredients, it's complete
+        [], // No partial combinations
+        final_combination.name,
+        COLORS.green,
+        centerX,
+        centerY,
+        vesselsToMerge[0].w * 1.2, // Slightly larger
+        vesselsToMerge[0].h * 1.2
+      );
+      
+      // Set properties
+      finalVessel.isNewlyCombined = true;
+      finalVessel.positionStrength = 1.0;
+      finalVessel.verb = final_combination.verb || "Complete!";
+      
+      // Remove all merged vessels from the game
+      vesselsToMerge.forEach(v => {
+        const index = vessels.indexOf(v);
+        if (index > -1) {
+          vessels.splice(index, 1);
+        }
+      });
+      
+      // Add the final vessel
+      vessels.push(finalVessel);
+      
+      console.log("Final vessel created:", finalVessel.name);
+      return finalVessel;
+    } else {
+      console.error("ERROR: Multiple vessel combination didn't match final recipe!");
+      console.error("Expected:", final_combination.required);
+      console.error("Got:", expandedItems);
+      return null;
+    }
+  }
+
+  function attemptCombination(v1, v2, mouseX = null, mouseY = null) {
+    console.log("=== ATTEMPTING COMBINATION ===");
+    console.log("Vessel 1:", v1.name || v1.ingredients.join("+") || "unnamed");
+    console.log("Vessel 2:", v2.name || v2.ingredients.join("+") || "unnamed");
+    
+    // Use mouse position if provided, otherwise fall back to average position
+    const newVesselX = mouseX !== null ? mouseX : (v1.x + v2.x) / 2;
+    const newVesselY = mouseY !== null ? mouseY : (v1.y + v2.y) / 2;
+    
+    // Check if hint is active (simplified - now just checks the flag)
+    let hintActive = showingHint;
+    
+    // UNIFIED LOGIC: Helper function to check if a combination of items matches a recipe
+    const findMatchingRecipe = (items) => {
+        console.log("Looking for recipe with items:", items);
+        
+        // Normalize items for comparison (trim whitespace, handle case)
+        const normalizedItems = items.map(item => item.trim());
+        
+        // First check the final combination
+        if (arraysMatchExact(normalizedItems, final_combination.required)) {
+            console.log("✓ Matched: Final combination!");
+            return final_combination;
+        }
+        
+        // Then check all intermediate combinations
+        for (const combo of intermediate_combinations) {
+            if (arraysMatchExact(normalizedItems, combo.required)) {
+                console.log(`✓ Matched: ${combo.name}`);
+                return combo;
+            }
+        }
+        
+        // Check for partial matches (subset of required ingredients)
+        for (const combo of intermediate_combinations.concat([final_combination])) {
+            // Check if all items are part of the recipe (but recipe might need more)
+            if (normalizedItems.every(item => combo.required.includes(item)) && 
+                normalizedItems.length < combo.required.length) {
+                console.log(`⚠ Partial match for: ${combo.name} (needs ${combo.required.length - normalizedItems.length} more items)`);
+                console.log(`  Current items: [${normalizedItems.join(", ")}]`);
+                console.log(`  Recipe needs: [${combo.required.join(", ")}]`);
+                return { ...combo, isPartial: true };
+            }
+        }
+        
+        console.log("✗ No matching recipe found");
+        console.log("  Items provided:", normalizedItems);
+        console.log("  Available recipes:");
+        intermediate_combinations.forEach(combo => {
+            console.log(`    - ${combo.name}: [${combo.required.join(", ")}]`);
+        });
+        console.log(`    - ${final_combination.name}: [${final_combination.required.join(", ")}]`);
+        
+        return null;
+    };
+    
+    // Helper function to create a vessel from a recipe match
+    const createVesselFromRecipe = (recipe, items) => {
+        const vesselWidth = Math.max(playAreaWidth * 0.25, 150);
+        const vesselHeight = vesselWidth * 0.5;
+        
+        let new_v;
+        
+        if (recipe.isPartial) {
+            // Create a yellow vessel for partial combination
+            new_v = new Vessel(items.filter(item => !intermediate_combinations.some(c => c.name === item)), 
+                              items.filter(item => intermediate_combinations.some(c => c.name === item)), 
+                              null, 'yellow', newVesselX, newVesselY, vesselWidth, vesselHeight);
+            
+            // Track as active partial combination
+            activePartialCombo = recipe.name;
+            
+            if (!partialCombinations.includes(recipe.name)) {
+                partialCombinations.push(recipe.name);
+                console.log(`Added ${recipe.name} to partialCombinations:`, partialCombinations);
+            }
+            
+            if (!startedCombinations.includes(recipe.name)) {
+                startedCombinations.push(recipe.name);
+                console.log(`Added ${recipe.name} to startedCombinations:`, startedCombinations);
+            }
+            
+            // Show partial combo message
+            if (typeof Byline !== 'undefined' && Byline.showPartialComboMessage) {
+                Byline.showPartialComboMessage();
+            } else if (typeof window.Byline !== 'undefined' && window.Byline.showPartialComboMessage) {
+                window.Byline.showPartialComboMessage();
+            }
+        } else {
+            // Create a completed vessel
+            new_v = new Vessel([], [], recipe.name, getNextCompletedVesselColor(recipe.name), 
+                              newVesselX, newVesselY, vesselWidth, vesselHeight);
+            
+            new_v.verb = recipe.verb || "Mix";
+            new_v.verbDisplayTime = 120;
+            
+            // Add to completedGreenVessels
+            if (!completedGreenVessels.some(vessel => vessel.name === recipe.name)) {
+                completedGreenVessels.push({name: recipe.name});
+            }
+            
+            // Clear activePartialCombo since we completed the combination
+            activePartialCombo = null;
+            
+            // Remove from partialCombinations array since it's now complete
+            const index = partialCombinations.indexOf(recipe.name);
+            if (index > -1) {
+                partialCombinations.splice(index, 1);
+                console.log(`Removed ${recipe.name} from partialCombinations:`, partialCombinations);
+            }
+            
+            // Show success message
+            if (typeof Byline !== 'undefined' && Byline.showSuccessMessage) {
+                Byline.showSuccessMessage();
+            } else if (typeof window.Byline !== 'undefined' && window.Byline.showSuccessMessage) {
+                window.Byline.showSuccessMessage();
+            }
+            
+            // Update collected ingredients tracking
+            for (let combo of intermediate_combinations.concat([final_combination])) {
+                if (combo.required.includes(new_v.name) && combo.collectedIngredients) {
+                    combo.collectedIngredients.push(new_v.name);
+                    console.log(`Added ${new_v.name} to ${combo.name}'s collected ingredients: ${combo.collectedIngredients.length}/${combo.required.length}`);
+                }
+            }
+        }
+        
+        new_v.isAdvanced = true;
+        return new_v;
+    };
+    
+    // Get all items from both vessels
+    const allItems = [...new Set([...getAllItemsFromVessel(v1), ...getAllItemsFromVessel(v2)])];
+    console.log("All items from both vessels:", allItems);
+    
+    // Check for Easter eggs first
+    if (typeof checkForEasterEgg === 'function' && easter_eggs && easter_eggs.length > 0) {
+        const eggMatch = checkForEasterEgg(allItems);
+        if (eggMatch) {
+            console.log("Found Easter egg match:", eggMatch.name);
+            displayEasterEgg(eggMatch, v1, v2);
+            moveHistory.push({type: 'easterEgg'});
+            return null;
+        }
+    }
+    
+    // Check if this is a duplicate ingredient combination (same ingredient twice)
+    if (v1.ingredients.length === 1 && v2.ingredients.length === 1 && 
+        v1.ingredients[0] === v2.ingredients[0]) {
+        console.log("Cannot combine two vessels with the same ingredient:", v1.ingredients[0]);
+        return null;
+    }
+    
+    // Find matching recipe
+    const matchingRecipe = findMatchingRecipe(allItems);
+    
+    if (matchingRecipe) {
+        console.log("Creating vessel from matching recipe:", matchingRecipe.name);
+        const new_v = createVesselFromRecipe(matchingRecipe, allItems);
+        
+        if (new_v) {
+            console.log("New vessel created in combineVessels:", new_v.name || "unnamed");
+        }
+        
+        return new_v;
+    } else {
+        console.log("No matching recipe found for items:", allItems);
+        return null;
+    }
+}
