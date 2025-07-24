@@ -490,14 +490,15 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
       return true;
     }
     
-    // Case 2: All the required combinations for the final dish are present
-    // Get all completed combinations
+    // Case 2: Check if all non-final-recipe intermediate combos have been completed
+    // This is different from just checking if final combo ingredients are ready
+    
+    // Get all completed combinations (including those in partial vessels)
     let completedCombos = vessels
       .filter(v => v.name !== null)
       .map(v => v.name);
     
     // Also check for combinations that are part of partial combinations
-    // These are combinations that are in the complete_combinations array of any vessel
     let partialCompletedCombos = [];
     vessels.forEach(v => {
       if (v.complete_combinations && v.complete_combinations.length > 0) {
@@ -508,26 +509,29 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
     // Combine both lists to get all completed combinations
     let allCompletedCombos = [...new Set([...completedCombos, ...partialCompletedCombos])];
     
-    // Check if all required combinations for the final dish are present
-    // either as standalone vessels or as part of partial combinations
+    // NEW LOGIC: Check if all intermediate combos have been completed
+    // An intermediate combo should be completed if:
+    // 1. It exists as a completed combo
+    // 2. OR it's a required ingredient for the final combo (part of the final recipe)
+    let allIntermediateCombosCompleted = intermediate_combinations.every(combo => {
+      // If this combo is required for the final combination, it doesn't need to be completed yet
+      if (final_combination.required.includes(combo.name)) {
+        return true; // This is part of the final recipe, so it's OK if not completed
+      }
+      // Otherwise, it must be completed
+      return allCompletedCombos.includes(combo.name);
+    });
+    
+    if (!allIntermediateCombosCompleted) {
+      return false; // Still have non-final-recipe combos to complete
+    }
+    
+    // Now check if we have all the ingredients needed for the final combo
     let allFinalIngredientsPresent = final_combination.required.every(req => 
       allCompletedCombos.includes(req));
     
-    // Check if only the required combinations for the final dish are present
-    // (plus possibly some base ingredients that can't be used)
-    let onlyFinalIngredientsRemain = true;
-    for (let combo of completedCombos) {
-      // If this is not a required ingredient for the final dish
-      if (!final_combination.required.includes(combo)) {
-        // And it's not a base ingredient (it's an intermediate combination)
-        if (intermediate_combinations.some(ic => ic.name === combo)) {
-          onlyFinalIngredientsRemain = false;
-          break;
-        }
-      }
-    }
-    
-    return allFinalIngredientsPresent && onlyFinalIngredientsRemain;
+    // If we have all ingredients for final combo AND all other combos are done, return true
+    return allFinalIngredientsPresent;
   }
   
   // Helper function to draw a star
@@ -1313,7 +1317,7 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
         // This is the initial state - wait for the animations to settle
         console.log("AUTO COMBINATION STATE: WAITING");
         autoFinalCombinationState = "PENULTIMATE";
-        autoFinalCombinationTimer = 0; // No delay before starting (reduced from 1)
+        autoFinalCombinationTimer = 20; // Wait before starting penultimate state
         break;
         
       case "PENULTIMATE":
@@ -1332,11 +1336,18 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
           finalCombinationVessels = [...vessels];
           // Skip directly to the ANIMATE state (combined SHAKE+MOVE)
           autoFinalCombinationState = "ANIMATE";
-          autoFinalCombinationTimer = 0; // Start animating immediately
+          autoFinalCombinationTimer = 15; // Small delay before animation
         } else if (vessels.length >= 2) {
           // Still need to make more combinations - identify the next vessels to combine
-          let v1 = vessels[0];
-          let v2 = vessels[1];
+          const vesselPair = findBestVesselPair();
+          
+          if (!vesselPair) {
+            console.error("No valid vessel combination found during auto sequence");
+            autoFinalCombination = false;
+            return;
+          }
+          
+          let [v1, v2] = vesselPair;
           
           // Create animation to move vessels toward each other
           animations.push(new CombineAnimation(v1.x, v1.y, v1.color, (v1.x + v2.x) / 2, (v1.y + v2.y) / 2));
@@ -1377,12 +1388,12 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
             }
             
             // Wait for the verb animation plus a little extra time before the next step
-            autoFinalCombinationTimer = 15; // 0.5 seconds at 30fps (reduced from 30)
+            autoFinalCombinationTimer = 45; // 1.5 seconds at 30fps
           } else {
             // If combination failed (shouldn't happen), move to next state
             console.error("Auto combination failed during penultimate phase");
             autoFinalCombinationState = "ANIMATE";
-            autoFinalCombinationTimer = 0; // Start immediately
+            autoFinalCombinationTimer = 20; // Wait before starting animation
           }
         } else {
           // If we have fewer than 2 vessels and aren't ready, something went wrong
@@ -1427,8 +1438,8 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
         });
         
         // Move to combining state - will wait for movement animations to complete
-        autoFinalCombinationState = "COMBINING";
-        autoFinalCombinationTimer = 0; // No additional delay needed
+                  autoFinalCombinationState = "COMBINING";
+          autoFinalCombinationTimer = 20; // Small delay before combining
         break;
         
       case "COMBINING":
@@ -1918,4 +1929,117 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
     }
     
     return missing;
+  }
+  
+  // Helper function to find the best pair of vessels to combine
+  function findBestVesselPair() {
+    // Try to find a valid combination among current vessels
+    for (let i = 0; i < vessels.length; i++) {
+      for (let j = i + 1; j < vessels.length; j++) {
+        const v1 = vessels[i];
+        const v2 = vessels[j];
+        
+        // Get all items from both vessels
+        const getAllItems = (vessel) => {
+          const items = [];
+          
+          // Add base ingredients
+          if (vessel.ingredients && vessel.ingredients.length > 0) {
+            items.push(...vessel.ingredients);
+          }
+          
+          // Add combo name if it exists
+          if (vessel.name && vessel.ingredients.length === 0) {
+            items.push(vessel.name);
+          }
+          
+          // Add complete combinations
+          if (vessel.complete_combinations && vessel.complete_combinations.length > 0) {
+            items.push(...vessel.complete_combinations);
+          }
+          
+          return items;
+        };
+        
+        const allItems = [...new Set([...getAllItems(v1), ...getAllItems(v2)])];
+        
+        // Check if this combination would result in a valid recipe
+        // First check the final combination
+        if (final_combination.required.length === allItems.length && 
+            final_combination.required.every(req => allItems.includes(req)) &&
+            allItems.every(item => final_combination.required.includes(item))) {
+          return [v1, v2];
+        }
+        
+        // Then check all intermediate combinations
+        for (const combo of intermediate_combinations) {
+          if (combo.required.length === allItems.length && 
+              combo.required.every(req => allItems.includes(req)) &&
+              allItems.every(item => combo.required.includes(item))) {
+            return [v1, v2];
+          }
+        }
+        
+        // Also check for partial matches that would progress toward a recipe
+        for (const combo of intermediate_combinations.concat([final_combination])) {
+          if (allItems.every(item => combo.required.includes(item)) && 
+              allItems.length < combo.required.length) {
+            return [v1, v2];
+          }
+        }
+      }
+    }
+    
+    // If no valid combination found, return null
+    return null;
+  }
+  
+  function isOnlyFinalComboRemaining() {
+    // Case 1: Only the final dish remains
+    if (vessels.length === 1 && vessels[0].name === final_combination.name) {
+      return true;
+    }
+    
+    // Case 2: Check if all non-final-recipe intermediate combos have been completed
+    // This is different from just checking if final combo ingredients are ready
+    
+    // Get all completed combinations (including those in partial vessels)
+    let completedCombos = vessels
+      .filter(v => v.name !== null)
+      .map(v => v.name);
+    
+    // Also check for combinations that are part of partial combinations
+    let partialCompletedCombos = [];
+    vessels.forEach(v => {
+      if (v.complete_combinations && v.complete_combinations.length > 0) {
+        partialCompletedCombos.push(...v.complete_combinations);
+      }
+    });
+    
+    // Combine both lists to get all completed combinations
+    let allCompletedCombos = [...new Set([...completedCombos, ...partialCompletedCombos])];
+    
+    // NEW LOGIC: Check if all intermediate combos have been completed
+    // An intermediate combo should be completed if:
+    // 1. It exists as a completed combo
+    // 2. OR it's a required ingredient for the final combo (part of the final recipe)
+    let allIntermediateCombosCompleted = intermediate_combinations.every(combo => {
+      // If this combo is required for the final combination, it doesn't need to be completed yet
+      if (final_combination.required.includes(combo.name)) {
+        return true; // This is part of the final recipe, so it's OK if not completed
+      }
+      // Otherwise, it must be completed
+      return allCompletedCombos.includes(combo.name);
+    });
+    
+    if (!allIntermediateCombosCompleted) {
+      return false; // Still have non-final-recipe combos to complete
+    }
+    
+    // Now check if we have all the ingredients needed for the final combo
+    let allFinalIngredientsPresent = final_combination.required.every(req => 
+      allCompletedCombos.includes(req));
+    
+    // If we have all ingredients for final combo AND all other combos are done, return true
+    return allFinalIngredientsPresent;
   }
