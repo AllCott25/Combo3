@@ -591,21 +591,26 @@ class WallpaperAnimation {
     this.lastScreenHeight = 0;
     this.dimensionsCalculated = false;
     
-    // Animation states: STATIC, SPLITTING, READY_FOR_COOK, CLOSING, OPENING, COMPLETE
-    this.state = 'STATIC';
+    // Animation states: STATIC, SPLITTING, READY_FOR_COOK, CLOSING, HOLDING, OPENING, COMPLETE
+    // Start in READY_FOR_COOK to skip initial animation - only animate on Cook button
+    this.state = 'READY_FOR_COOK';
     this.staticStartTime = null;
     this.splitStartTime = null;
     this.closeStartTime = null;
+    this.holdStartTime = null;
     this.openStartTime = null;
+    this.gameStartTriggered = false; // Flag to track if we've started the game
     this.minimumStaticDuration = 750; // 0.75 seconds in milliseconds
-    this.splitDuration = 1800; // 1.8 seconds for the split animation (slower, smoother)
-    this.closeDuration = 1200; // 1.2 seconds for closing animation (faster)
-    this.openDuration = 1800; // 1.8 seconds for opening animation (same as split)
+    this.splitDuration = 32; // 1.1 seconds at 30fps for the split animation (45% faster total)
+    this.closeDuration = 22; // 0.7 seconds at 30fps for closing animation (45% faster total)
+    this.openDuration = 32; // 1.1 seconds at 30fps for opening animation (45% faster total)
+    this.holdDuration = 5; // 0.17 seconds to hold closed while game loads
     
     // Split animation properties
     this.topHalfOffsetY = 0;
     this.bottomHalfOffsetY = 0;
-    this.splitProgress = 0; // 0 to 1
+    this.splitProgress = 1; // Start at 1 since we're in READY_FOR_COOK state (fully split)
+    this.progress = 1; // Initialize progress to 1 for READY_FOR_COOK state
     
     // Horizontal tiling properties
     this.wallStartX = 0; // Starting X position for the wall
@@ -629,9 +634,13 @@ class WallpaperAnimation {
     console.log(`📐 Using high-res image dimensions: ${imageToUse.width}x${imageToUse.height}`);
     console.log(`📏 FIXED aspect ratio: 25:17 = ${aspectRatio.toFixed(6)} (landscape)`);
     
-    // Target: 2.8 images high (smaller tiles so user sees more of each image) - use FULL screen height
+    // Mobile optimization: use much fewer, larger tiles on mobile devices
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    const imagesHigh = isMobile ? 1.2 : 2.8; // Smaller tiles on mobile to show more of the image
+    
+    // Target: 2.8 images high on desktop, 2.0 on mobile - use FULL screen height
     const fullScreenHeight = windowHeight || height; // Use full window height
-    const targetHeight = Math.round(fullScreenHeight / 2.8);
+    const targetHeight = Math.round(fullScreenHeight / imagesHigh);
     
     // Calculate width using EXACT 25:17 aspect ratio
     const exactWidth = targetHeight * aspectRatio;
@@ -652,11 +661,12 @@ class WallpaperAnimation {
     
     // Calculate horizontal tiling to fill FULL screen width
     const fullScreenWidth = windowWidth || width;
-    this.tilesAcross = Math.ceil(fullScreenWidth / this.tileWidth) + 2; // Extra tiles for margin
+    const extraTiles = isMobile ? 1 : 2; // Fewer extra tiles on mobile
+    this.tilesAcross = Math.ceil(fullScreenWidth / this.tileWidth) + extraTiles;
     
     // Calculate how many rows we need to fill FULL screen height
     const actualImagesHigh = fullScreenHeight / this.tileHeight;
-    this.tilesDown = Math.ceil(actualImagesHigh) + 2;
+    this.tilesDown = Math.ceil(actualImagesHigh) + extraTiles;
     
     // Calculate wall positioning for horizontal centering - full screen
     this.wallWidth = this.tilesAcross * this.tileWidth;
@@ -668,9 +678,14 @@ class WallpaperAnimation {
     this.dimensionsCalculated = true;
     
     console.log(`✅ 25:17 aspect-ratio tiles: ${this.tileWidth}x${this.tileHeight}`);
-    console.log(`📊 Actual images high: ${actualImagesHigh.toFixed(2)} (target: 2.8)`);
+    console.log(`📊 Actual images high: ${actualImagesHigh.toFixed(2)} (target: ${imagesHigh})`);
     console.log(`🌐 Horizontal tiling: ${this.tilesAcross} across, ${this.tilesDown} down`);
     console.log(`🎯 Wall dimensions: ${this.wallWidth}px wide, starts at X: ${this.wallStartX}`);
+    
+    // Mobile performance log
+    if (isMobile) {
+      console.log(`📱 Mobile optimizations: Using ${imagesHigh} images high (vs 2.8 on desktop)`);
+    }
     
     return true;
   }
@@ -700,22 +715,17 @@ class WallpaperAnimation {
       console.log("🍳 Starting COOK transition - close then open!");
       this.state = 'CLOSING';
       this.closeStartTime = Date.now();
-      this.splitProgress = 1; // Start from fully open position
-    } else if (this.state === 'STATIC') {
-      // Allow starting cook transition directly from STATIC state (when loaded on Cook button press)
-      console.log("🍳 Starting COOK transition directly from static state!");
-      this.state = 'CLOSING';
-      this.closeStartTime = Date.now();
-      this.splitProgress = 1; // Start from fully closed position, will close immediately
+      this.splitProgress = 1; // Start from fully open position (will close to 0, then open to 1)
+      this.gameStartTriggered = false; // Reset flag for this transition
     } else {
-      console.warn("⚠️ Cannot start cook transition - not in valid state:", this.state);
+      console.warn("⚠️ Cannot start cook transition - not in READY_FOR_COOK state:", this.state);
     }
   }
 
   update() {
-    // Mobile-specific timing adjustments
+    // Mobile-specific timing adjustments - removed speed penalty for wallpaper animation
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    const mobileSpeedMultiplier = isMobile ? 0.8 : 1.0; // Slower on mobile for better performance
+    const mobileSpeedMultiplier = 1.0; // Same speed on mobile and desktop for wallpaper animation
     
     switch (this.state) {
       case 'STATIC':
@@ -726,10 +736,10 @@ class WallpaperAnimation {
         break;
         
       case 'SPLITTING':
-        this.progress += (1 / this.splitDuration) * mobileSpeedMultiplier;
-        if (this.progress >= 1) {
+        this.splitProgress += (1 / this.splitDuration) * mobileSpeedMultiplier;
+        if (this.splitProgress >= 1) {
           this.state = 'READY_FOR_COOK';
-          this.progress = 1;
+          this.splitProgress = 1;
         }
         break;
         
@@ -738,18 +748,38 @@ class WallpaperAnimation {
         break;
         
       case 'CLOSING':
-        this.progress -= (1 / this.closeDuration) * mobileSpeedMultiplier;
-        if (this.progress <= 0) {
+        this.splitProgress -= (1 / this.closeDuration) * mobileSpeedMultiplier;
+        if (this.splitProgress <= 0) {
+          this.state = 'HOLDING';
+          this.splitProgress = 0;
+          this.holdStartTime = Date.now();
+          
+          // Start the game NOW while wallpaper is closed
+          if (!this.gameStartTriggered) {
+            console.log("🎮 Wallpaper fully closed - starting game behind the scenes!");
+            if (typeof actuallyStartGame === 'function') {
+              actuallyStartGame();
+            }
+            this.gameStartTriggered = true;
+          }
+        }
+        break;
+        
+      case 'HOLDING':
+        // Hold for a few frames to let game load behind closed wallpaper
+        const holdTime = Date.now() - this.holdStartTime;
+        if (holdTime >= (this.holdDuration * 1000 / 30)) { // Convert frames to milliseconds
           this.state = 'OPENING';
-          this.progress = 0;
+          this.openStartTime = Date.now();
+          console.log("🎭 Hold complete - opening wallpaper to reveal game!");
         }
         break;
         
       case 'OPENING':
-        this.progress += (1 / this.openDuration) * mobileSpeedMultiplier;
-        if (this.progress >= 1) {
+        this.splitProgress += (1 / this.openDuration) * mobileSpeedMultiplier;
+        if (this.splitProgress >= 1) {
           this.state = 'COMPLETE';
-          this.progress = 1;
+          this.splitProgress = 1;
         }
         break;
         
@@ -779,6 +809,13 @@ class WallpaperAnimation {
     const fullScreenHeight = windowHeight || height;
     const screenMidY = fullScreenHeight / 2;
     
+    // Calculate animation offsets based on split progress
+    // When splitProgress = 1: fully split (halves moved apart)
+    // When splitProgress = 0: fully closed (halves together)
+    const maxOffset = screenMidY; // Maximum distance to move each half
+    this.topHalfOffsetY = -this.splitProgress * maxOffset; // Move top half up
+    this.bottomHalfOffsetY = this.splitProgress * maxOffset; // Move bottom half down
+    
     // Draw top half
     this.drawHalf(imageToUse, 'top', screenMidY, this.topHalfOffsetY);
     
@@ -790,6 +827,12 @@ class WallpaperAnimation {
   
   drawHalf(imageToUse, half, screenMidY, offsetY) {
     push();
+    
+    // Mobile optimization: disable image smoothing for better performance
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    if (isMobile) {
+      drawingContext.imageSmoothingEnabled = false;
+    }
     
     // Set up simple clipping region for this half
     drawingContext.save();
@@ -812,22 +855,33 @@ class WallpaperAnimation {
     
     drawingContext.clip();
 
-    // Draw tiled wallpaper with running bond pattern - let clipping handle visibility
+    // Draw tiled wallpaper - simplified pattern on mobile
     for (let row = 0; row < this.tilesDown; row++) {
       for (let col = 0; col < this.tilesAcross; col++) {
-        // Running bond offset: even rows normal, odd rows shifted left by half tile width
-        const xOffset = (row % 2 === 0) ? 0 : -this.tileWidth / 2;
+        // Mobile optimization: disable running bond pattern for better performance
+        const xOffset = isMobile ? 0 : ((row % 2 === 0) ? 0 : -this.tileWidth / 2);
         
         const x = this.wallStartX + col * this.tileWidth + xOffset;
         const y = 0 + row * this.tileHeight - this.tileHeight + offsetY;
+        
+        // Mobile optimization: basic visibility check to skip off-screen tiles
+        if (isMobile) {
+          if (x + this.tileWidth < -100 || x > fullScreenWidth + 100 ||
+              y + this.tileHeight < -100 || y > fullScreenHeight + 100) {
+            continue; // Skip tiles that are far off-screen
+          }
+        }
         
         // Draw tile - clipping will handle visibility
         image(imageToUse, x, y, this.tileWidth, this.tileHeight);
       }
     }
     
-    // Restore clipping
+    // Restore clipping and image smoothing
     drawingContext.restore();
+    if (isMobile) {
+      drawingContext.imageSmoothingEnabled = true; // Re-enable for other drawing operations
+    }
     pop();
   }
 }

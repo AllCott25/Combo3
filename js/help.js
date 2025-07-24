@@ -38,7 +38,8 @@ function showHelpModal() {
     active: true,
     x: playAreaX + playAreaWidth / 2,
     y: playAreaY + playAreaHeight / 2, // Center vertically in play area
-    ...DesignSystem.getModalSize('help', playAreaWidth, playAreaHeight)
+    width: playAreaWidth * 0.85,  // 85% of play area width
+    height: playAreaHeight * 0.8, // 80% of play area height
     htmlElements: [], // Initialize as an empty array
     
     draw: function() {
@@ -51,35 +52,38 @@ function showHelpModal() {
       noStroke();
       rect(0, 0, width, height);
       
-      // Draw modal container using design system
+      // Draw modal container with white background and red border
       rectMode(CENTER);
       fill(255); // White background
-      DesignSystem.applyStroke('standard', UI_COLORS.border.dark);
-      rect(this.x, this.y, this.width, this.height, RADIUS.lg);
+      stroke(0, 50); // Use the same subtle border as buttons (50% opacity black)
+      strokeWeight(2); // Match the buttons' stroke weight
+      rect(this.x, this.y, this.width, this.height, 10); // Rounded corners (10px radius)
       
       // Draw X button in top-left corner
       const xPosX = this.x - this.width/2 + 25;
       const xPosY = this.y - this.height/2 + 25;
       const xSize = 15;
       
-      // X button using design system
+      // X button circle background
       noStroke();
-      fill(UI_COLORS.secondary);
-      circle(xPosX, xPosY, xSize * 2);
+      fill(COLORS.secondary); // Pink background for X
+      circle(xPosX, xPosY, xSize * 2); // Circle with diameter of 30px
       
       // X mark
-      DesignSystem.applyStroke('standard', '#ffffff');
+      stroke(255); // White X
+      strokeWeight(2);
       line(xPosX - xSize/2, xPosY - xSize/2, xPosX + xSize/2, xPosY + xSize/2);
       line(xPosX - xSize/2, xPosY + xSize/2, xPosX + xSize/2, xPosY - xSize/2);
       
       // Calculate title position (30px from top edge)
       const titleY = this.y - this.height/2 + 30;
       
-      // Modal title using design system
-      fill(UI_COLORS.text);
+      // "How to Play" title 
+      fill(0); // Black text
       noStroke();
       textAlign(CENTER, TOP);
-      DesignSystem.applyTextStyle('title', playAreaWidth);
+      textSize(this.width * 0.05); // 5% of modal width
+      textStyle(BOLD);
       
       // Use different title text based on tutorial mode - APlasker
       const titleText = (typeof isTutorialMode !== 'undefined' && isTutorialMode) ? 
@@ -89,10 +93,11 @@ function showHelpModal() {
       // Calculate title height for positioning the underline
       const titleHeight = textAscent() + textDescent();
       
-      // Add underline using design system
+      // Add underline below the title at 120% of title height
       const titleWidth = textWidth(titleText);
-      const underlineY = titleY + (titleHeight * 1.2);
-      DesignSystem.applyStroke('light', UI_COLORS.text);
+      const underlineY = titleY + (titleHeight * 1.2); // Position underline at 120% of title height
+      stroke(0); // Black line
+      strokeWeight(1.5);
       line(this.x - titleWidth/2, underlineY, this.x + titleWidth/2, underlineY);
       
       // Define content area start position (relative to modal height)

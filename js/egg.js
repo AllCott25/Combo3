@@ -157,19 +157,22 @@
         line(xPos - xOffset, yPos - xOffset, xPos + xOffset, yPos + xOffset);
         line(xPos - xOffset, yPos + xOffset, xPos + xOffset, yPos - xOffset);
         
-        // "You found the egg!" text using design system
-        fill(UI_COLORS.text);
+        // "You found the egg!" text
+        fill(0);
         noStroke();
         textAlign(CENTER, CENTER);
-        DesignSystem.applyTextStyle('body', playAreaWidth);
+        textSize(12); // Smaller text
+        textStyle(NORMAL);
         text("You found the egg!", 0, -this.radius * 0.4);
         
-        // Easter egg name using design system
-        DesignSystem.applyTextStyle('title', playAreaWidth);
+        // Easter egg name
+        textSize(20); // Smaller text
+        textStyle(BOLD);
         text(egg.name, 0, 0);
         
-        // "Keep going!" text using design system
-        DesignSystem.applyTextStyle('body', playAreaWidth);
+        // "Keep going!" text
+        textSize(12); // Smaller text
+        textStyle(NORMAL);
         text("Keep going!", 0, this.radius * 0.4);
         
         pop(); // End of scaled drawing
