@@ -140,6 +140,21 @@
         window.setup = function() {};
         window.draw = function() {};
         
+        // Define a simple Vessel class for testing
+        class Vessel {
+            constructor(ingredients, complete_combinations, name, color, x, y, size, targetSize) {
+                this.ingredients = ingredients || [];
+                this.complete_combinations = complete_combinations || [];
+                this.name = name || null;
+                this.color = color || '#F9F5EB';
+                this.x = x || 0;
+                this.y = y || 0;
+                this.size = size || 100;
+                this.targetSize = targetSize || 100;
+                this.started_combinations = [];
+            }
+        }
+        
         // Initialize required global variables
         let vessels = [];
         let intermediate_combinations = [];

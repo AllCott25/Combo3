@@ -204,6 +204,33 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
     return items;
   }
   
+  // Helper function to expand combos into base ingredients when needed for final recipe
+  function expandItemsForFinalRecipe(items) {
+    const expanded = [];
+    
+    for (const item of items) {
+      // Check if this item is an intermediate combo
+      const combo = intermediate_combinations.find(c => c.name === item);
+      
+      if (combo) {
+        // This is a combo - check if the final recipe wants the combo itself or its ingredients
+        if (final_combination.required.includes(item)) {
+          // Final recipe wants the combo itself
+          expanded.push(item);
+        } else {
+          // Final recipe might want the ingredients - expand the combo
+          // Recursively expand in case of nested combos
+          expanded.push(...expandItemsForFinalRecipe(combo.required));
+        }
+      } else {
+        // This is a base ingredient
+        expanded.push(item);
+      }
+    }
+    
+    return expanded;
+  }
+  
   // CENTRALIZED: Helper function to check if two arrays have the same elements
   function arraysMatchExact(arr1, arr2) {
     if (!arr1 || !arr2) return false;
@@ -1569,9 +1596,12 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
       allAvailableItems.push(...getAllItemsFromVessel(v));
     });
     
-    // Count occurrences of each item
+    // Expand combos into their base ingredients if needed
+    const expandedItems = expandItemsForFinalRecipe(allAvailableItems);
+    
+    // Count occurrences of each item (after expansion)
     let availableItemsMap = {};
-    for (const item of allAvailableItems) {
+    for (const item of expandedItems) {
       availableItemsMap[item] = (availableItemsMap[item] || 0) + 1;
     }
     
@@ -1617,7 +1647,7 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
     // Log success
     console.log("Final combination is ready!");
     console.log("Required:", requiredComponentsMap);
-    console.log("Available:", availableItemsMap);
+    console.log("Available (expanded):", availableItemsMap);
     
     return true;
   }
@@ -1720,6 +1750,23 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
     console.log("Current vessels:", vessels.map(v => v.name || v.ingredients.join("+")));
     console.log("Total vessels available:", vessels.length);
     
+    // Define required variables
+    const completedCombos = vessels
+      .filter(v => v.name && v.ingredients.length === 0)
+      .map(v => v.name);
+    const partialCombinations = [];
+    const startedCombinations = [];
+    
+    // Collect partial and started combinations
+    vessels.forEach(v => {
+      if (v.complete_combinations) {
+        partialCombinations.push(...v.complete_combinations);
+      }
+      if (v.started_combinations) {
+        startedCombinations.push(...v.started_combinations);
+      }
+    });
+    
     // Log detailed state of each vessel
     vessels.forEach((v, index) => {
       logVesselState(v, `  [${index}] `);
@@ -1756,6 +1803,16 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
             console.log(`  Vessel ${j}: [${otherVesselItems.join(", ")}]`);
             return [vessel, vessels[j]];
           }
+          
+          // Also check with expanded items
+          const expandedCombined = expandItemsForFinalRecipe(combinedItems);
+          if (arraysMatchExact(expandedCombined, final_combination.required)) {
+            console.log(`✓ Found pair that completes final combination (after expansion)!`);
+            console.log(`  Vessel ${i}: [${vesselItems.join(", ")}]`);
+            console.log(`  Vessel ${j}: [${otherVesselItems.join(", ")}]`);
+            console.log(`  Expanded: [${expandedCombined.join(", ")}]`);
+            return [vessel, vessels[j]];
+          }
         }
       }
     }
@@ -1781,6 +1838,15 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
         // First check the final combination
         if (arraysMatchExact(allItems, final_combination.required)) {
           console.log("✓ Found valid pair for final combination!");
+          return [v1, v2];
+        }
+        
+        // Also check if expanding combos into ingredients would match final recipe
+        const expandedItems = expandItemsForFinalRecipe(allItems);
+        console.log(`  Expanded: [${expandedItems.join(", ")}]`);
+        
+        if (arraysMatchExact(expandedItems, final_combination.required)) {
+          console.log("✓ Found valid pair for final combination (after expansion)!");
           return [v1, v2];
         }
         
