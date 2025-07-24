@@ -26,14 +26,14 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
         };
         
         // First check the final combination
-        if (arraysMatch(normalizedItems, final_combination.required)) {
+        if (arraysMatch(normalizedItems, final_combination.required.map(req => req.trim()))) {
             console.log("✓ Matched: Final combination!");
             return final_combination;
         }
         
         // Then check all intermediate combinations
         for (const combo of intermediate_combinations) {
-            if (arraysMatch(normalizedItems, combo.required)) {
+            if (arraysMatch(normalizedItems, combo.required.map(req => req.trim()))) {
                 console.log(`✓ Matched: ${combo.name}`);
                 return combo;
             }
@@ -41,12 +41,14 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
         
         // Check for partial matches (subset of required ingredients)
         for (const combo of intermediate_combinations.concat([final_combination])) {
+            // Normalize recipe requirements for comparison
+            const normalizedRequired = combo.required.map(req => req.trim());
             // Check if all items are part of the recipe (but recipe might need more)
-            if (normalizedItems.every(item => combo.required.includes(item)) && 
-                normalizedItems.length < combo.required.length) {
-                console.log(`⚠ Partial match for: ${combo.name} (needs ${combo.required.length - normalizedItems.length} more items)`);
+            if (normalizedItems.every(item => normalizedRequired.includes(item)) && 
+                normalizedItems.length < normalizedRequired.length) {
+                console.log(`⚠ Partial match for: ${combo.name} (needs ${normalizedRequired.length - normalizedItems.length} more items)`);
                 console.log(`  Current items: [${normalizedItems.join(", ")}]`);
-                console.log(`  Recipe needs: [${combo.required.join(", ")}]`);
+                console.log(`  Recipe needs: [${normalizedRequired.join(", ")}]`);
                 return { ...combo, isPartial: true };
             }
         }
