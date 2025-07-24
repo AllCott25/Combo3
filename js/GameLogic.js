@@ -1382,7 +1382,7 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
         }
         
         // If we only have the exact vessels needed for the final combination, move to next state
-        if (isFinalCombinationReady()) {
+        if (checkReadyForFinalCombination()) {
           console.log("Final combination is ready with vessels:", vessels.map(v => v.name));
           // Store the vessels for the final combination
           finalCombinationVessels = [...vessels];
@@ -1594,9 +1594,8 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
   }
   
   // Helper function to check if we have exactly the final combination ingredients ready
-  function isFinalCombinationReady() {
-    // If we don't have any vessels, we're not ready
-    if (vessels.length === 0) return false;
+  function checkReadyForFinalCombination() {
+    console.log("AUTO COMBINATION STATE: PENULTIMATE");
     
     // Get all available items from all vessels
     let allAvailableItems = [];
@@ -1640,16 +1639,45 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
     
     // Count items that aren't part of the final recipe
     let extraItems = 0;
+    let extraItemsList = [];
     for (const item in availableItemsMap) {
       if (!requiredComponentsMap[item]) {
         extraItems += availableItemsMap[item];
+        extraItemsList.push(item);
       }
     }
     
-    // If we have extra items that aren't part of the final combination, we're not ready
+    // FIXED: Check if extra items are base ingredients that should be included in final combination
     if (extraItems > 0) {
-      console.log(`Have extra items not needed for final combination: ${extraItems} extra items`);
-      return false;
+      console.log(`Have extra items not explicitly required for final combination: ${extraItems} extra items`);
+      console.log(`Extra items: [${extraItemsList.join(", ")}]`);
+      
+      // Check if these extra items are base ingredients
+      let allExtraAreBaseIngredients = true;
+      for (const extraItem of extraItemsList) {
+        // Check if this is a base ingredient
+        const isBaseIngredient = base_ingredients && base_ingredients.includes(extraItem);
+        
+        // Also check if it's marked as a final base ingredient
+        const isFinalBaseIngredient = recipe_data && recipe_data.finalBaseIngredients && 
+                                      recipe_data.finalBaseIngredients.includes(extraItem);
+        
+        if (!isBaseIngredient && !isFinalBaseIngredient) {
+          // This extra item is not a base ingredient
+          allExtraAreBaseIngredients = false;
+          console.log(`Extra item '${extraItem}' is NOT a base ingredient`);
+        } else {
+          console.log(`Extra item '${extraItem}' IS a base ingredient (base: ${isBaseIngredient}, finalBase: ${isFinalBaseIngredient})`);
+        }
+      }
+      
+      // If all extra items are base ingredients, we should proceed with the final combination
+      if (!allExtraAreBaseIngredients) {
+        console.log("Not all extra items are base ingredients - not ready for final combination");
+        return false;
+      } else {
+        console.log("All extra items are base ingredients - proceeding with final combination");
+      }
     }
     
     // Log success
@@ -1804,11 +1832,33 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
           const otherVesselItems = getAllItemsFromVessel(vessels[j]);
           const combinedItems = [...new Set([...vesselItems, ...otherVesselItems])];
           
+          // FIXED: Also get base ingredients that might be present
+          const baseIngredientsInCombination = combinedItems.filter(item => 
+            (base_ingredients && base_ingredients.includes(item)) ||
+            (recipe_data && recipe_data.finalBaseIngredients && recipe_data.finalBaseIngredients.includes(item))
+          );
+          
           // Check if combining these would complete the final recipe
           if (arraysMatchExact(combinedItems, final_combination.required)) {
             console.log(`✓ Found pair that completes final combination!`);
             console.log(`  Vessel ${i}: [${vesselItems.join(", ")}]`);
             console.log(`  Vessel ${j}: [${otherVesselItems.join(", ")}]`);
+            return [vessel, vessels[j]];
+          }
+          
+          // FIXED: If we have all required items plus only base ingredients, that's also valid
+          const hasAllRequired = final_combination.required.every(req => combinedItems.includes(req));
+          const extraItems = combinedItems.filter(item => !final_combination.required.includes(item));
+          const allExtrasAreBase = extraItems.every(item => 
+            (base_ingredients && base_ingredients.includes(item)) ||
+            (recipe_data && recipe_data.finalBaseIngredients && recipe_data.finalBaseIngredients.includes(item))
+          );
+          
+          if (hasAllRequired && allExtrasAreBase) {
+            console.log(`✓ Found pair that completes final combination (with base ingredients)!`);
+            console.log(`  Vessel ${i}: [${vesselItems.join(", ")}]`);
+            console.log(`  Vessel ${j}: [${otherVesselItems.join(", ")}]`);
+            console.log(`  Base ingredients included: [${baseIngredientsInCombination.join(", ")}]`);
             return [vessel, vessels[j]];
           }
           
@@ -1921,6 +1971,12 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
     console.log("Current vessels:", vessels.map(v => v.name || v.ingredients.join("+")));
     console.log("Final recipe requires:", final_combination.required);
     
+    // FIXED: Also check for base ingredients that should be included
+    const finalBaseIngredients = (recipe_data && recipe_data.finalBaseIngredients) || [];
+    if (finalBaseIngredients.length > 0) {
+      console.log("Final base ingredients needed:", finalBaseIngredients);
+    }
+    
     // Get all available items from all vessels
     let allAvailableItems = [];
     let vesselItemsMap = new Map(); // Map to track which items come from which vessels
@@ -1949,7 +2005,7 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
       return null;
     }
     
-    // Find the minimal set of vessels that contains all required items
+    // Find the minimal set of vessels that contains all required items AND base ingredients
     let requiredVesselIndices = new Set();
     
     // For each required item, we need at least one vessel that contains it
@@ -1985,10 +2041,30 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
       }
     }
     
+    // FIXED: Also include vessels that contain final base ingredients
+    for (let i = 0; i < vessels.length; i++) {
+      const vesselItems = getAllItemsFromVessel(vessels[i]);
+      
+      // Check if this vessel contains any base ingredients
+      const hasBaseIngredient = vesselItems.some(item => 
+        base_ingredients && base_ingredients.includes(item)
+      );
+      
+      // Check if this vessel contains any final base ingredients
+      const hasFinalBaseIngredient = vesselItems.some(item => 
+        finalBaseIngredients.includes(item)
+      );
+      
+      if (hasBaseIngredient || hasFinalBaseIngredient) {
+        console.log(`Vessel ${i} contains base ingredient(s): [${vesselItems.join(", ")}]`);
+        requiredVesselIndices.add(i);
+      }
+    }
+    
     // Get the vessels at these indices
     const selectedVessels = Array.from(requiredVesselIndices).map(i => vessels[i]);
     
-    // Verify that the selected vessels contain exactly what we need
+    // Verify that the selected vessels contain what we need
     let selectedItems = [];
     selectedVessels.forEach(v => {
       selectedItems.push(...getAllItemsFromVessel(v));
@@ -1996,196 +2072,13 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
     
     const expandedSelectedItems = expandItemsForFinalRecipe(selectedItems);
     
-    // Check if we have exactly the final combination
-    if (arraysMatchExact(expandedSelectedItems, final_combination.required)) {
-      console.log(`✓ Found ${selectedVessels.length} vessels for final combination!`);
-      selectedVessels.forEach((v, i) => {
-        console.log(`  Vessel ${i}: [${getAllItemsFromVessel(v).join(", ")}]`);
-      });
-      return selectedVessels;
-    }
-    
-    // If we have extra items, it might still be valid if we need all vessels
-    // This handles cases where vessels contain partial combinations
-    console.log("Selected vessels contain extra items, checking if all vessels are needed...");
-    
-    // Return all vessels if they collectively match the final recipe
-    const allVesselItems = [];
-    vessels.forEach(v => {
-      allVesselItems.push(...getAllItemsFromVessel(v));
+    console.log(`✓ Found ${selectedVessels.length} vessels for final combination!`);
+    selectedVessels.forEach((v, i) => {
+      console.log(`  Vessel ${i}: [${getAllItemsFromVessel(v).join(", ")}]`);
     });
     
-    const allExpanded = expandItemsForFinalRecipe(allVesselItems);
-    if (arraysMatchExact(allExpanded, final_combination.required)) {
-      console.log(`✓ All ${vessels.length} vessels needed for final combination!`);
-      return vessels;
-    }
-    
-    console.log("Could not find exact vessel combination for final recipe");
-    return null;
-  }
-
-  // Helper function to find the best pair of vessels to combine
-  function findBestVesselPair() {
-    console.log("=== FINDING BEST VESSEL PAIR ===");
-    console.log("Current vessels:", vessels.map(v => v.name || v.ingredients.join("+")));
-    console.log("Total vessels available:", vessels.length);
-    
-    // Define required variables
-    const completedCombos = vessels
-      .filter(v => v.name && v.ingredients.length === 0)
-      .map(v => v.name);
-    const partialCombinations = [];
-    const startedCombinations = [];
-    
-    // Collect partial and started combinations
-    vessels.forEach(v => {
-      if (v.complete_combinations) {
-        partialCombinations.push(...v.complete_combinations);
-      }
-      if (v.started_combinations) {
-        startedCombinations.push(...v.started_combinations);
-      }
-    });
-    
-    // Log detailed state of each vessel
-    vessels.forEach((v, index) => {
-      logVesselState(v, `  [${index}] `);
-    });
-    
-    // Special handling for final combination scenarios
-    // Check if we have a partial final combination that needs one more ingredient
-    for (let i = 0; i < vessels.length; i++) {
-      const vessel = vessels[i];
-      
-      // Check if this vessel contains partial final combination items
-      const vesselItems = getAllItemsFromVessel(vessel);
-      
-      // Count how many final recipe components this vessel has
-      let finalComponentsInVessel = vesselItems.filter(item => 
-        final_combination.required.includes(item)
-      );
-      
-      // If this vessel has some (but not all) final components, look for the missing pieces
-      if (finalComponentsInVessel.length > 0 && finalComponentsInVessel.length < final_combination.required.length) {
-        console.log(`\nVessel ${i} has partial final components: [${finalComponentsInVessel.join(", ")}]`);
-        
-        // Check other vessels for the missing components
-        for (let j = 0; j < vessels.length; j++) {
-          if (i === j) continue;
-          
-          const otherVesselItems = getAllItemsFromVessel(vessels[j]);
-          const combinedItems = [...new Set([...vesselItems, ...otherVesselItems])];
-          
-          // Check if combining these would complete the final recipe
-          if (arraysMatchExact(combinedItems, final_combination.required)) {
-            console.log(`✓ Found pair that completes final combination!`);
-            console.log(`  Vessel ${i}: [${vesselItems.join(", ")}]`);
-            console.log(`  Vessel ${j}: [${otherVesselItems.join(", ")}]`);
-            return [vessel, vessels[j]];
-          }
-          
-          // Also check with expanded items
-          const expandedCombined = expandItemsForFinalRecipe(combinedItems);
-          if (arraysMatchExact(expandedCombined, final_combination.required)) {
-            console.log(`✓ Found pair that completes final combination (after expansion)!`);
-            console.log(`  Vessel ${i}: [${vesselItems.join(", ")}]`);
-            console.log(`  Vessel ${j}: [${otherVesselItems.join(", ")}]`);
-            console.log(`  Expanded: [${expandedCombined.join(", ")}]`);
-            return [vessel, vessels[j]];
-          }
-        }
-      }
-    }
-    
-    // Standard combination logic
-    // Try to find a valid combination among current vessels
-    for (let i = 0; i < vessels.length; i++) {
-      for (let j = i + 1; j < vessels.length; j++) {
-        const v1 = vessels[i];
-        const v2 = vessels[j];
-        
-        // Get all items from both vessels
-        const items1 = getAllItemsFromVessel(v1);
-        const items2 = getAllItemsFromVessel(v2);
-        const allItems = [...new Set([...items1, ...items2])];
-        
-        console.log(`\nTesting pair ${i} + ${j}:`);
-        console.log(`  Vessel ${i}: [${items1.join(", ")}]`);
-        console.log(`  Vessel ${j}: [${items2.join(", ")}]`);
-        console.log(`  Combined: [${allItems.join(", ")}]`);
-        
-        // Check if this combination would result in a valid recipe
-        // First check the final combination
-        if (arraysMatchExact(allItems, final_combination.required)) {
-          console.log("✓ Found valid pair for final combination!");
-          return [v1, v2];
-        }
-        
-        // Also check if expanding combos into ingredients would match final recipe
-        const expandedItems = expandItemsForFinalRecipe(allItems);
-        console.log(`  Expanded: [${expandedItems.join(", ")}]`);
-        
-        if (arraysMatchExact(expandedItems, final_combination.required)) {
-          console.log("✓ Found valid pair for final combination (after expansion)!");
-          return [v1, v2];
-        }
-        
-        // Then check all intermediate combinations
-        for (const combo of intermediate_combinations) {
-          if (arraysMatchExact(allItems, combo.required)) {
-            console.log(`✓ Found valid pair for ${combo.name}!`);
-            return [v1, v2];
-          }
-        }
-        
-        // Also check for partial matches that would progress toward a recipe
-        for (const combo of intermediate_combinations.concat([final_combination])) {
-          if (allItems.every(item => combo.required.includes(item)) && 
-              allItems.length < combo.required.length) {
-            console.log(`✓ Found valid partial match for ${combo.name}`);
-            return [v1, v2];
-          }
-        }
-      }
-    }
-    
-    // If no valid combination found, log what we have and what recipes expect
-    console.log("\n✗ No valid vessel pair found!");
-    console.log("\nDETAILED DIAGNOSTIC INFO:");
-    console.log("========================");
-    
-    // Log current game state
-    console.log("\nGame State:");
-    console.log(`  - Game Won: ${gameWon}`);
-    console.log(`  - Completed Combos: [${completedCombos.join(", ")}]`);
-    console.log(`  - Partial Combos: [${partialCombinations.join(", ")}]`);
-    console.log(`  - Started Combos: [${startedCombinations.join(", ")}]`);
-    
-    // Log all available items
-    const allAvailableItems = [];
-    vessels.forEach(v => {
-      allAvailableItems.push(...getAllItemsFromVessel(v));
-    });
-    console.log(`\nAll available items in game: [${[...new Set(allAvailableItems)].join(", ")}]`);
-    
-    // Check which recipes could potentially be made
-    console.log("\nRecipe Analysis:");
-    const allCombos = [...intermediate_combinations, final_combination];
-    allCombos.forEach(combo => {
-      const required = combo.required;
-      const available = required.filter(req => allAvailableItems.includes(req));
-      const missing = required.filter(req => !allAvailableItems.includes(req));
-      
-      console.log(`\n  ${combo.name}:`);
-      console.log(`    Required: [${required.join(", ")}]`);
-      console.log(`    Available: [${available.join(", ")}] (${available.length}/${required.length})`);
-      if (missing.length > 0) {
-        console.log(`    Missing: [${missing.join(", ")}]`);
-      }
-    });
-    
-    return null;
+    // Return the selected vessels even if they have "extra" base ingredients
+    return selectedVessels;
   }
 
   // NEW: Function to combine multiple vessels at once (for final combinations)
@@ -2223,9 +2116,28 @@ function combineVessels(v1, v2, mouseX = null, mouseY = null) {
     const expandedItems = expandItemsForFinalRecipe(allItems);
     console.log("Expanded items:", expandedItems);
     
-    // Check if this matches the final combination
-    if (arraysMatchExact(expandedItems, final_combination.required)) {
+    // FIXED: Check if we have all required items plus only base ingredients
+    const hasAllRequired = final_combination.required.every(req => 
+      expandedItems.includes(req) || allItems.includes(req)
+    );
+    
+    const extraItems = allItems.filter(item => 
+      !final_combination.required.includes(item)
+    );
+    
+    const allExtrasAreBase = extraItems.length === 0 || extraItems.every(item => 
+      (base_ingredients && base_ingredients.includes(item)) ||
+      (recipe_data && recipe_data.finalBaseIngredients && recipe_data.finalBaseIngredients.includes(item))
+    );
+    
+    // Check if this matches the final combination (either exactly or with base ingredients)
+    if (arraysMatchExact(expandedItems, final_combination.required) || 
+        (hasAllRequired && allExtrasAreBase)) {
       console.log("✓ Creating final combination vessel!");
+      
+      if (extraItems.length > 0) {
+        console.log("  Including base ingredients:", extraItems);
+      }
       
       // Create the final vessel
       let finalVessel = new Vessel(
